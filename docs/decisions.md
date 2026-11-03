@@ -17,3 +17,8 @@ Status legend: **ASK** = asked to instructor, **DECIDED** = our choice (document
 
 ## Open items (user)
 - MySQL version, bonus cache table (yes/no), dataset download date, report format.
+
+## Cleaning counts (Phase 1)
+- Before cleaning: 541,909 rows
+- After cleaning: 397,884 rows
+- Rules (PDF Section 3 only): quantity > 0, unit_price > 0, customer_id present, drop cancellations (transaction_id starts with C). No other cleaning (duplicates and non-product codes kept).

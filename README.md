@@ -9,6 +9,7 @@ Near-real-time data warehouse for the UCI **Online Retail** dataset (DS3003 & DS
 ## Structure
 | Folder | Contents |
 |---|---|
+| `notebooks/` | Step-by-step exploration notebooks (cleaning, splitting, master data) |
 | `src/` | Python program (cleaning, master data, MESHJOIN threads, DW loading) |
 | `sql/` | DW creation script and OLAP query script |
 | `data/` | Local data files (not committed; `Online Retail.xlsx` goes here) |

@@ -14,3 +14,7 @@ venv/
 Thumbs.db
 .vscode/
 .idea/
+
+# Jupyter
+.ipynb_checkpoints/
+*.pkl
