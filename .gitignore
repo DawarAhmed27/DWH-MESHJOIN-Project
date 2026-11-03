@@ -1,0 +1,16 @@
+# Data (dataset is downloaded separately; generated files are rebuilt by the program)
+data/*
+!data/.gitkeep
+*.xlsx
+*.csv
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
