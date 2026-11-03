@@ -29,3 +29,11 @@ Status legend: **ASK** = asked to instructor, **DECIDED** = our choice (document
 - Rows: Online 278,740, Periodic 119,144
 - store_id is not stored at this stage (not in the PDF's online file / staging columns). Store rule (1 for Online, 2 + n % 4 for Periodic) is applied during enrichment outside MESHJOIN using the in-memory store list.
 - Note for report: the store rule reuses the same MD5 number, so store carts (remainder 7/8/9) are 2/3 odd, giving stores 3 and 5 about twice the carts of stores 2 and 4 (909 / 1,869 / 920 / 1,863).
+
+## Master data (Phase 3, PDF 5.4.3)
+- stable(text, n) = int(MD5(text UTF-8)[:8], 16) % n; index 0 = first value in the PDF list. Suffixes concatenated with no separator (e.g. "17850age").
+- Customers: 4,338 (from cleaned data). 8 customers have more than one country -> country of first cleaned transaction (sorted by event_time, file order breaks ties).
+- Products: 3,665. Name = longest stripped Description; 54 products had tied longest names -> first in file order. UNKNOWN used 0 times (cleaning removed all empty descriptions). No case-variant product ids.
+- Labels use ASCII hyphens (0-17, not the PDF's en dash) for safe CSV/MySQL encoding.
+- Files sorted by id so 500-row partitions are deterministic: customers 9 partitions, products 8 partitions (PDF estimated ~6; count reported from loaded table).
+- Independent re-check (plain csv + hashlib, no pandas): 0 mismatches in both files.
