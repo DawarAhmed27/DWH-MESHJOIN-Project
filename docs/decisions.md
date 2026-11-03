@@ -22,3 +22,10 @@ Status legend: **ASK** = asked to instructor, **DECIDED** = our choice (document
 - Before cleaning: 541,909 rows
 - After cleaning: 397,884 rows
 - Rules (PDF Section 3 only): quantity > 0, unit_price > 0, customer_id present, drop cancellations (transaction_id starts with C). No other cleaning (duplicates and non-product codes kept).
+
+## Split counts (Phase 2, PDF 5.4.1)
+- Rule: n = int(MD5(transaction_id)[:8], 16); n % 10 in 0-6 -> Online, 7-9 -> Periodic. Applied per cart (mixed carts = 0).
+- Carts: 18,532 total -> Online 12,971 (69.99%), Periodic 5,561 (30.01%)
+- Rows: Online 278,740, Periodic 119,144
+- store_id is not stored at this stage (not in the PDF's online file / staging columns). Store rule (1 for Online, 2 + n % 4 for Periodic) is applied during enrichment outside MESHJOIN using the in-memory store list.
+- Note for report: the store rule reuses the same MD5 number, so store carts (remainder 7/8/9) are 2/3 odd, giving stores 3 and 5 about twice the carts of stores 2 and 4 (909 / 1,869 / 920 / 1,863).
