@@ -1,18 +1,10 @@
--- =====================================================================
--- Create-DW.sql
--- Near-real-time Data Warehouse for the Online Retail dataset
--- Creates the working tables (master data, staging, shed) and the
--- star schema (5 dimensions + 1 fact). Any old copy is dropped first.
--- Run inside the database chosen at program start (no CREATE DATABASE).
--- MySQL 8.0+
--- =====================================================================
 
+-- working tables (master data, staging, shed) 
+-- star schema (5 dimensions + 1 fact). 
+CREATE DATABASE IF NOT EXISTS dwh_project;
+USE dwh_project;
 SET NAMES utf8mb4;
 
--- ---------------------------------------------------------------------
--- 0. Drop old copies (view first, then fact, then dimensions, then
---    working tables, so foreign keys never block a drop)
--- ---------------------------------------------------------------------
 DROP VIEW  IF EXISTS STORE_QUARTERLY_SALES;
 
 DROP TABLE IF EXISTS fact_sales;
@@ -28,9 +20,7 @@ DROP TABLE IF EXISTS periodic_sales_data;
 DROP TABLE IF EXISTS shed_table;
 
 
--- =====================================================================
--- PART A: WORKING TABLES
--- =====================================================================
+-- WORKING TABLES
 
 -- Customer Master Data (stays on disk; MESHJOIN reads one partition
 -- of 500 tuples per iteration using partition_no)
@@ -67,7 +57,7 @@ CREATE TABLE periodic_sales_data (
     customer_id     VARCHAR(10)    NOT NULL,
     product_id      VARCHAR(20)    NOT NULL,
     quantity        INT            NOT NULL,
-    unit_price      DECIMAL(10,3)  NOT NULL,   -- 3 decimals: 4 rows have price 0.001
+    unit_price      DECIMAL(10,3)  NOT NULL,   
     event_time      DATETIME       NOT NULL,
     sales_mode      VARCHAR(8)     NOT NULL,
     release_hour    TINYINT        NOT NULL,          -- group 0 to 47
@@ -86,7 +76,7 @@ CREATE TABLE shed_table (
     customer_id     VARCHAR(10)    NOT NULL,
     product_id      VARCHAR(20)    NOT NULL,
     quantity        INT            NOT NULL,
-    unit_price      DECIMAL(10,3)  NOT NULL,   -- 3 decimals: 4 rows have price 0.001
+    unit_price      DECIMAL(10,3)  NOT NULL,   
     event_time      DATETIME       NOT NULL,
     sales_mode      VARCHAR(8)     NOT NULL,          -- the transaction's flag
     shed_time       DATETIME(3)    NOT NULL,          -- when it was shed
@@ -95,10 +85,8 @@ CREATE TABLE shed_table (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
 
--- =====================================================================
--- PART B: STAR SCHEMA
+-- STAR SCHEMA
 -- Surrogate keys for the dimensions; original ids are kept as columns.
--- =====================================================================
 
 CREATE TABLE dim_customer (
     customer_key                INT          NOT NULL AUTO_INCREMENT,
@@ -172,7 +160,7 @@ CREATE TABLE fact_sales (
     store_key        INT            NOT NULL,
     time_key         BIGINT         NOT NULL,
     quantity         INT            NOT NULL,
-    revenue          DECIMAL(14,3)  NOT NULL,   -- SALE = QUANTITY x PRICE (3 decimals, see unit_price)
+    revenue          DECIMAL(14,3)  NOT NULL,   -- SALE = QUANTITY x PRICE
     sales_mode       VARCHAR(8)     NOT NULL,   -- Online / Periodic
     processing_mode  VARCHAR(8)     NOT NULL,   -- Live / Periodic / Shed
     PRIMARY KEY (sale_key),
