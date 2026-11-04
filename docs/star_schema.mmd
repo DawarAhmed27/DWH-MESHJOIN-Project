@@ -1,0 +1,61 @@
+erDiagram
+    dim_customer ||--o{ fact_sales : customer_key
+    dim_product  ||--o{ fact_sales : product_key
+    dim_supplier ||--o{ fact_sales : supplier_key
+    dim_store    ||--o{ fact_sales : store_key
+    dim_time     ||--o{ fact_sales : time_key
+
+    fact_sales {
+        BIGINT sale_key PK
+        VARCHAR transaction_id
+        INT customer_key FK
+        INT product_key FK
+        INT supplier_key FK
+        INT store_key FK
+        BIGINT time_key FK
+        INT quantity
+        DECIMAL revenue
+        VARCHAR sales_mode
+        VARCHAR processing_mode
+    }
+    dim_customer {
+        INT customer_key PK
+        VARCHAR customer_id
+        VARCHAR gender
+        VARCHAR age_group
+        VARCHAR occupation
+        CHAR city_category
+        VARCHAR stay_in_current_city_years
+        VARCHAR marital_status
+    }
+    dim_product {
+        INT product_key PK
+        VARCHAR product_id
+        VARCHAR product_name
+        VARCHAR product_category
+    }
+    dim_supplier {
+        INT supplier_key PK
+        CHAR supplier_id
+        VARCHAR supplier_name
+    }
+    dim_store {
+        INT store_key PK
+        TINYINT store_id
+        VARCHAR store_name
+        VARCHAR city
+    }
+    dim_time {
+        BIGINT time_key PK
+        DATETIME event_time
+        DATE full_date
+        TINYINT hour
+        TINYINT day_of_month
+        TINYINT month
+        TINYINT quarter
+        SMALLINT year
+        VARCHAR day_of_week
+        VARCHAR day_type
+        VARCHAR season
+        TINYINT half_year
+    }
