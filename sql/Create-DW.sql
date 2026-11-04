@@ -1,8 +1,6 @@
 
 -- working tables (master data, staging, shed) 
 -- star schema (5 dimensions + 1 fact). 
-CREATE DATABASE IF NOT EXISTS dwh_project;
-USE dwh_project;
 SET NAMES utf8mb4;
 
 DROP VIEW  IF EXISTS STORE_QUARTERLY_SALES;
