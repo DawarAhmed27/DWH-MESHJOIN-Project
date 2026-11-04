@@ -81,3 +81,8 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - Each cart is assigned whole to a group by its starting position in the sorted list: group = start_row * 48 // 119,144 (target ~2,482 rows/group). Always exactly 48 groups.
 - Test run: smallest group 2,263 rows, largest 2,710 rows, 0 carts split (equal cut would split 44 carts and give 2,482/2,483).
 - PDF splits by size (position in the time-sorted list), not by time windows (48 time windows would give 910 to 6,191 rows).
+
+## Working data counts (Phase 4)
+- online_sales_stream.csv: 278,740 rows, 12,971 carts, PDF columns only, original (time) order.
+- periodic_sales_data.csv: 119,144 rows, 5,561 carts, 48 whole-cart groups (release_hour 0-47, released = 0).
+- Smallest group 2,263, largest 2,710. Carts split: 0. Carts in both files: 0. Groups in time order: yes.
