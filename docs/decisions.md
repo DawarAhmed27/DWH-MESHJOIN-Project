@@ -86,3 +86,11 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - online_sales_stream.csv: 278,740 rows, 12,971 carts, PDF columns only, original (time) order.
 - periodic_sales_data.csv: 119,144 rows, 5,561 carts, 48 whole-cart groups (release_hour 0-47, released = 0).
 - Smallest group 2,263, largest 2,710. Carts split: 0. Carts in both files: 0. Groups in time order: yes.
+
+## Program setup (Phase 6)
+- .py modules in src/: cleaning, splitting, master_data, working_data (notebook logic as functions), db (MySQL), main (entry point).
+- Startup asks host, port, database, user, password (getpass, never stored) and the path of Online Retail.xlsx; Enter accepts defaults (localhost, 3306, dwh_project, root). Database created if missing.
+- "Path of the online file" read as the path of the input file; online_sales_stream.csv and the master CSVs are written next to it.
+- Settings from the command line: --peak (80), --nonpeak (10), --hour (60 s), --mode (peak). Printed at startup and again before the threads.
+- Inserts with executemany in batches of 5,000. partition_no = row number // 500 (customers 9, products 8 partitions).
+- Verified: program outputs identical to the notebook files (customer, product, online, periodic CSVs; only Windows line endings differ). Full real-data preparation ~30 s (cleaning ~27 s is reading the xlsx).

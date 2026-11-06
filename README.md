@@ -21,4 +21,13 @@ UCI Machine Learning Repository: https://archive.ics.uci.edu/dataset/352/online+
 Download date: _TBD_
 
 ## How to run
-_To be added._
+1. Install Python packages: `pip install -r requirements.txt`
+2. Put `Online Retail.xlsx` in the project folder (or `data/`).
+3. Start MySQL 8.0+ and run: `python src/main.py`
+   Optional settings: `--peak 80 --nonpeak 10 --hour 60 --mode peak`
+4. Enter host, port, database name, user, password (hidden) and the path of the transactional file.
+   Press Enter to accept a default. The database is created if it does not exist.
+
+The program runs `Create-DW.sql` (drops and recreates all tables), cleans the file, prepares the
+Master Data, loads it, writes `online_sales_stream.csv` and the Master Data CSV files next to the
+input file, and loads the 48 periodic groups into `periodic_sales_data`.
