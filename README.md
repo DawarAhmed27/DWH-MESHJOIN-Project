@@ -25,8 +25,10 @@ Download date: _TBD_
 2. Put `Online Retail.xlsx` in the project folder (or `data/`).
 3. Start MySQL 8.0+ and run: `python src/main.py`
    Optional settings: `--peak 80 --nonpeak 10 --hour 60 --mode peak`
-4. Enter host, port, database name, user, password (hidden) and the path of the transactional file.
-   Press Enter to accept a default. The database is created if it does not exist.
+4. The program shows the default connection (localhost, 3306, dwh_project, root) and the file path.
+   Press Enter to use them, or type `c` to change any of them (host, port, database, user, file path;
+   a folder path is accepted). Then type the MySQL password (hidden, never stored).
+   The database is created if it does not exist.
 
 The program runs `Create-DW.sql` (drops and recreates all tables), cleans the file, prepares the
 Master Data, loads it, writes `online_sales_stream.csv` and the Master Data CSV files next to the

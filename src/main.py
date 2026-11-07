@@ -72,18 +72,30 @@ def main():
     print_settings(cfg)
 
     # 1. connection details and file path (password is never stored)
-    print("\nDatabase connection (press Enter to accept the default)")
-    host     = ask("Host", "localhost")
-    port     = int(ask("Port", "3306"))
-    database = ask("Database name", "dwh_project")
-    user     = ask("User name", "root")
-    password = getpass("Password: ")
-    data_file = ask("Path of the transactional file", default_data_file())
+    host, port, database, user = "localhost", 3306, "dwh_project", "root"
+    data_file = default_data_file()
+    print("\nConnection settings:")
+    print(f"  Host: {host}   Port: {port}   Database: {database}   User: {user}")
+    print(f"  Transactional file: {data_file}")
+    if input("Press Enter to use these, or type c to change them: ").strip().lower() == "c":
+        host     = ask("Host", host)
+        port     = int(ask("Port", str(port)))
+        database = ask("Database name", database)
+        user     = ask("User name", user)
+        data_file = ask("Path of the transactional file", data_file)
+    password = getpass("MySQL password: ")
+
+    if os.path.isdir(data_file):   # a folder was given: look for the file inside it
+        data_file = os.path.join(data_file, "Online Retail.xlsx")
     if not os.path.exists(data_file):
         sys.exit(f"File not found: {data_file}")
     out_dir = os.path.dirname(os.path.abspath(data_file))
 
-    conn = db.connect(host, port, database, user, password)
+    try:
+        conn = db.connect(host, port, database, user, password)
+    except Exception as e:
+        sys.exit(f"Could not connect to MySQL at {host}:{port} as {user}.\n"
+                 f"Check that MySQL is running, the port and the password.\n({e})")
     print(f"Connected to {host}:{port}/{database}")
 
     # 2. create the working tables and the DW (drops any old copy)
