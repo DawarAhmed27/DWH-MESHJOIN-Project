@@ -33,3 +33,5 @@ Download date: _TBD_
 The program runs `Create-DW.sql` (drops and recreates all tables), cleans the file, prepares the
 Master Data, loads it, writes `online_sales_stream.csv` and the Master Data CSV files next to the
 input file, and loads the 48 periodic groups into `periodic_sales_data`.
+It then starts the OnlineThread, PeriodicThread and MeshJoinThread and prints a status line every 5 s.
+For a quick test run use fast settings, e.g. `python src/main.py --peak 5000 --hour 2` (about 2 minutes).

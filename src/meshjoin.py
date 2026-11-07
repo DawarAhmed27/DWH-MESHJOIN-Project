@@ -135,3 +135,47 @@ def send_to_output(finished, output):
     for t in finished:
         output.put(add_store(t))
     return len(finished)
+
+
+# ---------------------------------------------------------------------------
+# Step 7.7: the MeshJoinThread - the room working nonstop
+# ---------------------------------------------------------------------------
+
+import threading
+import time
+
+
+class MeshJoinThread(threading.Thread):
+    """Runs MESHJOIN iterations in a loop: take a chunk (up to 500) from the
+    stream buffer, iterate, send finished transactions to the output queue.
+    Stops when both feeding threads are done and everything has left the room."""
+
+    def __init__(self, db_params, buffer, output, stop_event, feeders):
+        super().__init__(name="MeshJoinThread", daemon=True)
+        self.db_params = db_params
+        self.buffer = buffer
+        self.output = output
+        self.stop_event = stop_event
+        self.feeders = feeders            # [OnlineThread, PeriodicThread]
+        self.mj = None
+        self.processed = 0
+        self.finished = False
+
+    def feeders_done(self):
+        return all(f.finished for f in self.feeders)
+
+    def run(self):
+        conn = db.connect(*self.db_params)   # own MySQL connection for this thread
+        self.mj = MeshJoin(conn)
+        while not self.stop_event.is_set():
+            chunk = self.buffer.take_chunk(500)
+            if chunk or self.mj.queue:
+                self.processed += send_to_output(self.mj.iterate(chunk), self.output)
+                if not chunk:
+                    time.sleep(0.05)      # nothing new arrived: don't hammer the disk
+            elif self.feeders_done() and self.buffer.size() == 0:
+                break                     # all sales have passed through the room
+            else:
+                time.sleep(0.05)          # room empty, waiting for the next arrivals
+        conn.close()
+        self.finished = True

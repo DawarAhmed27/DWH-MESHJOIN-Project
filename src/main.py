@@ -2,21 +2,27 @@
 
 Phase 6: ask for the connection details, create the tables, clean the file,
 prepare the Master Data, load it, write the online file and load the 48
-periodic groups into the staging table. (Threads: Phases 7-8.)
+periodic groups into the staging table.
+Phase 7: start the OnlineThread, PeriodicThread and MeshJoinThread.
 
 Run:  python src/main.py   [--peak 80] [--nonpeak 10] [--hour 60] [--mode peak]
 """
 
 import argparse
 import os
+import queue
 import sys
+import threading
 import time
+from collections import Counter
 from getpass import getpass
 
 import cleaning
 import db
 import master_data
+import meshjoin
 import splitting
+import stream
 import working_data
 
 STREAM_BUFFER_LIMIT = 1000
@@ -134,10 +140,57 @@ def main():
     print(f"Online file: {online_file}")
     print(f"Preparation took {time.time() - t0:.1f} s")
 
-    # settings printed again just before the threads start (Phase 7)
-    print("\nReady to start the threads")
-    print_settings(cfg)
     conn.close()
+
+    # settings printed again just before the threads start (PDF Section 9)
+    print("\nStarting the threads")
+    print_settings(cfg)
+    run_threads(cfg, (host, port, database, user, password), online_file,
+                expected=len(online) + len(periodic))
+
+
+def run_threads(cfg, db_params, online_file, expected):
+    """Phase 7: OnlineThread + PeriodicThread feed the stream buffer,
+    MeshJoinThread joins with the master data, finished rows go to `output`."""
+    settings = stream.Settings(cfg.peak, cfg.nonpeak, cfg.hour, cfg.mode)
+    buffer = stream.StreamBuffer(STREAM_BUFFER_LIMIT)
+    output = queue.Queue()
+    stop = threading.Event()
+
+    online = stream.OnlineThread(online_file, buffer, settings, stop)
+    periodic = stream.PeriodicThread(db_params, buffer, settings, stop)
+    mesh = meshjoin.MeshJoinThread(db_params, buffer, output, stop, [online, periodic])
+    for t in (online, periodic, mesh):
+        t.start()
+
+    # until Phase 9 loads the DW: count and check what comes out
+    received, stores, unmatched = 0, Counter(), 0
+    start = time.time()
+    last_print = 0
+    while mesh.is_alive():
+        time.sleep(0.5)
+        while not output.empty():
+            t = output.get()
+            received += 1
+            stores[t["store_id"]] += 1
+            unmatched += not (t["customer_matched"] and t["product_matched"])
+        if time.time() - last_print >= 5:
+            last_print = time.time()
+            m = mesh.mj
+            print(f"[{time.time() - start:6.0f} s] online sent {online.sent:,} | "
+                  f"periodic groups {len(periodic.log)}/48 | buffer {buffer.size():,} | "
+                  f"in MESHJOIN {m.in_memory() if m else 0:,} | iterations {m.iterations if m else 0:,} | "
+                  f"out {received:,}")
+    while not output.empty():
+        t = output.get()
+        received += 1
+        stores[t["store_id"]] += 1
+        unmatched += not (t["customer_matched"] and t["product_matched"])
+
+    print(f"\nAll threads finished in {time.time() - start:.0f} s")
+    print(f"Transactions out of MESHJOIN: {received:,} (expected {expected:,})")
+    print(f"Not fully enriched: {unmatched}")
+    print("Rows per store:", dict(sorted(stores.items())))
 
 
 if __name__ == "__main__":
