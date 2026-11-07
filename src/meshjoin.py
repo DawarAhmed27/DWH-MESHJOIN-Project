@@ -99,3 +99,39 @@ class MeshJoin:
                     H[k] = rest
                 else:
                     del H[k]
+
+
+# ---------------------------------------------------------------------------
+# Step 7.6: store enrichment (outside MESHJOIN) and the output queue
+# ---------------------------------------------------------------------------
+
+from splitting import md5_number
+
+# Store list kept in memory (PDF 5.4.2), not a file or a disk table
+STORES = {
+    1: ("Online", "Web"),
+    2: ("London Bridge", "London"),
+    3: ("Manchester Arndale", "Manchester"),
+    4: ("Birmingham Bullring", "Birmingham"),
+    5: ("Edinburgh Princes", "Edinburgh"),
+}
+
+
+def add_store(t):
+    """Online cart -> store 1. Store cart -> 2 + (MD5 number mod 4), using the
+    same MD5 number as the sales_mode rule. Joined from the in-memory list."""
+    if t["sales_mode"] == "Online":
+        store_id = 1
+    else:
+        store_id = 2 + md5_number(t["transaction_id"]) % 4
+    t["store_id"] = store_id
+    t["store_name"], t["city"] = STORES[store_id]
+    return t
+
+
+def send_to_output(finished, output):
+    """Finished transactions from MESHJOIN: add the store, then put them in
+    the output queue, ready to be loaded into the DW (Phase 9)."""
+    for t in finished:
+        output.put(add_store(t))
+    return len(finished)
