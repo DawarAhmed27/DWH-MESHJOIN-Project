@@ -47,6 +47,30 @@ def insert_rows(conn, table, df):
     cur.close()
 
 
+MASTER_TABLES = ("customer_master_data", "product_master_data")
+
+
+def partition_count(conn, table):
+    """How many partitions (pages of 500 rows) a master table has."""
+    cur = conn.cursor()
+    cur.execute(f"SELECT MAX(partition_no) + 1 FROM {table}")
+    n = cur.fetchone()[0]
+    cur.close()
+    return n
+
+
+def read_partition(conn, table, k):
+    """MESHJOIN disk buffer: read ONE partition (500 rows) of a master table.
+    Uses the partition_no index, so only that page is read from disk."""
+    if table not in MASTER_TABLES:
+        raise ValueError(f"not a master table: {table}")
+    cur = conn.cursor(dictionary=True)        # each row comes back as a dict
+    cur.execute(f"SELECT * FROM {table} WHERE partition_no = %s", (k,))
+    rows = cur.fetchall()
+    cur.close()
+    return rows
+
+
 def count(conn, table):
     cur = conn.cursor()
     cur.execute(f"SELECT COUNT(*) FROM {table}")
