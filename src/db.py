@@ -71,6 +71,20 @@ def read_partition(conn, table, k):
     return rows
 
 
+def release_group(conn, k):
+    """PeriodicThread: extract group k from the staging table and mark it
+    released = 1, so the same group is never extracted twice."""
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT transaction_id, customer_id, product_id, quantity, unit_price, "
+                "event_time, sales_mode FROM periodic_sales_data "
+                "WHERE release_hour = %s AND released = 0 ORDER BY row_id", (k,))
+    rows = cur.fetchall()
+    cur.execute("UPDATE periodic_sales_data SET released = 1 WHERE release_hour = %s", (k,))
+    conn.commit()
+    cur.close()
+    return rows
+
+
 def count(conn, table):
     cur = conn.cursor()
     cur.execute(f"SELECT COUNT(*) FROM {table}")
