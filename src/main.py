@@ -5,6 +5,7 @@ prepare the Master Data, load it, write the online file and load the 48
 periodic groups into the staging table.
 Phase 7: start the OnlineThread, PeriodicThread and MeshJoinThread.
 Phase 8: accept commands while the threads run (type help for the list).
+Phase 9: the LoaderThread loads every finished transaction into the DW.
 
 Run:  python src/main.py   [--peak 80] [--nonpeak 10] [--hour 60] [--mode peak]
 """
@@ -176,6 +177,7 @@ def print_status(s, buffer, mesh, online, periodic, loader, conn):
     print(f"Read back from shed (non-peak): {mesh.read_back:,}")
     print(f"Online sent: {online.sent:,}   Periodic groups released: {len(periodic.log)} / 48")
     print(f"Out of MESHJOIN: {loader.received:,}   by processing mode: {dict(loader.by_processing_mode)}")
+    print(f"Loaded into the DW: {loader.loaded:,} fact rows")
 
 
 def run_threads(cfg, db_params, online_file, expected):
@@ -189,7 +191,7 @@ def run_threads(cfg, db_params, online_file, expected):
     online = stream.OnlineThread(online_file, buffer, settings, stop, db_params)
     periodic = stream.PeriodicThread(db_params, buffer, settings, stop)
     mesh = meshjoin.MeshJoinThread(db_params, buffer, output, stop, [online, periodic], settings)
-    loader = LoaderThread(output, stop)
+    loader = LoaderThread(output, stop, db_params)
     for t in (online, periodic, mesh, loader):
         t.start()
     conn = db.connect(*db_params)            # main thread's own connection (for status)
@@ -199,8 +201,8 @@ def run_threads(cfg, db_params, online_file, expected):
     # tell the user once when every transaction has gone through
     def watch():
         while not stop.is_set():
-            if mesh.all_processed() and output.empty() and loader.received == expected:
-                print(f"\nAll {expected:,} transactions processed in {time.time() - start:.0f} s. "
+            if mesh.all_processed() and loader.loaded == expected:
+                print(f"\nAll {expected:,} transactions loaded into the DW in {time.time() - start:.0f} s. "
                       "Type status or quit.\n> ", end="", flush=True)
                 return
             time.sleep(0.5)
@@ -239,8 +241,9 @@ def run_threads(cfg, db_params, online_file, expected):
     # quit: stop all threads, then print the summary
     print("Stopping the threads ...")
     stop.set()
-    for t in (online, periodic, mesh, loader):
+    for t in (online, periodic, mesh):
         t.join(timeout=5)
+    loader.join()                            # loads what is left in the output queue
     conn.close()
     print(f"Ran for {time.time() - start:.0f} s")
     print(f"Transactions out of MESHJOIN: {loader.received:,} (expected {expected:,})")
@@ -249,6 +252,7 @@ def run_threads(cfg, db_params, online_file, expected):
     print("Rows per store:", dict(sorted(loader.stores.items())))
     print(f"Shed in peak: online {online.shed_online:,}, periodic {online.shed_periodic + periodic.shed:,}")
     print(f"Read back from shed (non-peak): {mesh.read_back:,}")
+    print(f"Loaded into the DW: {loader.loaded:,} fact rows")
 
 
 if __name__ == "__main__":

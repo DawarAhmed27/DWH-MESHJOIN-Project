@@ -119,3 +119,9 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - Online sales are shed and read back one transaction at a time (they arrive one at a time).
 - conn.autocommit = True on every connection, so a thread's reads see what other threads wrote (status showed an old shed count without it).
 - Tests on real data: test_shedding.py shed 14,394 periodic + 1,339 online, nothing lost, 0 carts split; test_readback.py read back all 15,733 in non-peak, online-flagged first, all processing_mode Shed, all enriched.
+
+## Loading the DW (Phase 9)
+- Consolidation (consolidation.py): revenue = Decimal(unit_price) x quantity (exact); dim_time row per minute, time_key = YYYYMMDDHHMM; day names from a fixed English list.
+- LoaderThread: batches of up to 1,000 or 0.5 s; per batch, new dimension rows first, then the fact rows, one commit. Known dimension values kept in maps id -> surrogate key (DW keys, not the Master Data).
+- No bonus: Live results go straight into the fact table.
+- quit: the loader loads what is left in the output queue before the program closes.
