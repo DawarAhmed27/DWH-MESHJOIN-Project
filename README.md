@@ -50,3 +50,12 @@ For a quick test run use fast settings, e.g. `python src/main.py --peak 5000 --h
 | `quit` | stop the threads and close the program |
 
 The program keeps running after all transactions are processed (it prints a message) until `quit`.
+
+## Running the queries
+After the program has loaded the DW (it prints "All ... transactions loaded into the DW"):
+1. Open `sql/Queries-DW.sql` in MySQL Workbench.
+2. Double-click `dwh_project` in the Schemas list so it is the default schema.
+3. Run the script (or run each query on its own). Each query starts with a comment `-- Qn.` that says what it answers.
+
+The loaded dates are 2010-12-01 to 2011-12-09, so "the loaded year" is 2011 and "the latest six months" are July to December 2011 (named in the script comments).
+MySQL has no materialized views; the script stores the result of the view `STORE_QUARTERLY_SALES` in the table `MV_STORE_QUARTERLY_SALES` (run its two statements again to refresh it).

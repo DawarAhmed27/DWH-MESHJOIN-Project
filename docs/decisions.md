@@ -126,3 +126,14 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - No bonus: Live results go straight into the fact table.
 - quit: the loader loads what is left in the output queue before the program closes.
 - Periodic on the hour (9.3): sales_mode Online (Live, and online rows read back from shed) loaded at once; sales_mode Periodic (Periodic, and periodic rows read back from shed) wait in a list and are loaded together at every hour tick of the LoaderThread (every hour_seconds from its start). A group released at hour k is joined during hour k and loaded at the next tick. quit loads what is still waiting.
+
+## Queries (Phase 10)
+- Loaded dates 2010-12-01 to 2011-12-09: "the loaded year" = 2011; "the latest six months" = Jul-Dec 2011 (Dec to the 9th). Named in SQL comments.
+- Q1 ranks the top 5 products over 2011 per day type, then drills down by month; Q11 ranks the top 5 inside each month and day type.
+- Top-N uses ROW_NUMBER with a tie-break on the id, so exactly 5 rows; Q8 uses RANK (only 3 city categories).
+- Q7 average purchase amount = average revenue per transaction (fact row).
+- Q14, Q15, Q19 use all loaded dates; Q15 months Dec 2010 to Dec 2011 in order.
+- Q16 counts distinct carts per product pair (DISTINCT transaction_id, product_key first; product_key a < b).
+- Q17 WITH ROLLUP on 2011, GROUPING() labels product / supplier subtotal / store subtotal / grand total.
+- Q20 view STORE_QUARTERLY_SALES (store, year, quarter); ORDER BY on the reading SELECT.
+- Materialized view: MySQL has none; MV_STORE_QUARTERLY_SALES table created from the view (refresh = drop + create again). Create-DW.sql drops it too.
