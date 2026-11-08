@@ -1,0 +1,41 @@
+DATA NOTE
+Dawar Ahmed, 24I-2533 - DW Project, Fall 2026
+
+SOURCE
+Chen, D., Sain, S. L., and Guo, K. Online Retail. UCI Machine Learning Repository.
+https://archive.ics.uci.edu/dataset/352/online+retail
+Downloaded on 3 November 2026 (file Online Retail.xlsx).
+541,909 transaction lines from 2010-12-01 08:26 to 2011-12-09 12:50.
+
+FILES IN THIS FOLDER (written by src/main.py)
+online_sales_stream.csv     278,740 rows  online sales, original time order
+customer_master_data.csv      4,338 rows  customer Master Data, sorted by customer_id
+product_master_data.csv       3,665 rows  product Master Data, sorted by product_id
+The periodic sales (119,144 rows, 48 groups) are loaded into the MySQL staging table
+periodic_sales_data and are not a file.
+
+CLEANING (only the four rules of the project statement)
+Rule (counted in this order)                      Removed   Rows left
+Start                                                         541,909
+CustomerID must be present                        135,080     406,829
+InvoiceNo must not start with C (cancellation)      8,905     397,924
+Quantity > 0                                             0     397,924
+UnitPrice > 0                                           40     397,884
+After cleaning: 397,884 rows, 18,532 carts, 4,338 customers, 3,665 products.
+Duplicates and non-product codes were kept. IDs are text; CustomerID without ".0".
+
+RULES
+sales_mode: n = int(first 8 hex digits of MD5(InvoiceNo), 16).
+  n mod 10 = 0..6 -> Online, 7..9 -> Periodic (one label per cart).
+  Online: 12,971 carts (69.99%), 278,740 rows. Periodic: 5,561 carts (30.01%), 119,144 rows.
+Store: Online -> store 1; Periodic -> store 2 + (n mod 4). Store list kept in memory.
+Master Data attributes: stable(text, k) = MD5 number of text mod k (index into the list
+  of values given in the project statement).
+  Customer: gender = stable(id, 2); age_group = stable(id + "age", 7);
+  occupation = stable(id + "occ", 10); city_category = stable(id + country, 3);
+  stay_in_current_city_years = stable(id + "stay", 5); marital_status = stable(id + "mar", 2).
+  Product: product_name = longest description; product_category = stable(id + "cat", 10);
+  supplier = stable(id, 5) (5 suppliers).
+Partitions: 500 rows -> customers 9, products 8.
+Periodic groups: periodic sales sorted by time; whole carts; cart goes to group
+  (start row x 48) div 119,144; 48 groups of 2,263 to 2,710 rows.

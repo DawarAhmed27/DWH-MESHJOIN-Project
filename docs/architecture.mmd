@@ -1,0 +1,18 @@
+flowchart TB
+  X["Online Retail.xlsx"] --> C["Cleaning<br/>4 rules"]
+  C --> S["sales_mode<br/>MD5 rule"]
+  S --> OF["online_sales_stream.csv<br/>278,740"]
+  S --> ST[("periodic_sales_data<br/>48 groups, 119,144")]
+  S --> MD[("Master Data<br/>customers 9 partitions<br/>products 8 partitions")]
+  OF --> OT["OnlineThread<br/>80/s peak, 10/s non-peak"]
+  ST --> PT["PeriodicThread<br/>1 group per hour"]
+  OT --> B["Stream buffer<br/>max 1,000<br/>online first"]
+  PT --> B
+  OT -. "peak: periodic first,<br/>online last" .-> SH[("shed_table")]
+  PT -. "peak: cart does not fit" .-> SH
+  SH -. "non-peak: read back" .-> M
+  B --> M["MeshJoinThread<br/>chunk 500, H, queue<br/>1 customer + 1 product<br/>partition per iteration"]
+  MD --> M
+  M --> E["Store from in-memory list"]
+  E --> L["LoaderThread<br/>revenue, dimensions first,<br/>online at once,<br/>periodic on the hour"]
+  L --> DW[("DW: 5 dimensions<br/>+ fact_sales")]

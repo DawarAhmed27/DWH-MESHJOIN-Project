@@ -1,6 +1,7 @@
 # Data (dataset is downloaded separately; generated files are rebuilt by the program)
 data/*
 !data/.gitkeep
+!data/Data_Note.txt
 *.xlsx
 *.csv
 # Python

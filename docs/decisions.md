@@ -8,15 +8,15 @@ Status legend: **ASK** = asked to instructor, **DECIDED** = our choice (document
 | 2 | MESHJOIN with two master tables | DECIDED: A | Proposed: each iteration reads one partition of each table; H has two indexes over the same chunk; chunk leaves after max(#cust, #prod) iterations; mark product match done to avoid double enrichment |
 | 3 | ID text format for MD5 | DECIDED | CustomerID -> `str(int(x))` (e.g. "17850"); InvoiceNo/StockCode read as text, stripped, case kept. Assert no ".0" before hashing |
 | 4 | Periodic group > 1,000-row buffer | DECIDED | Peak: overflow shed to `shed_table` as whole carts. Non-peak: fed gradually, no shedding; shed rows drained when idle. Next group queues behind an unfinished one. Buffer has live + periodic queues; chunk takes live first |
-| 5 | "Loaded year" / periods | DECIDED | 2011 detected as `MAX(year)` in DW; dates named in SQL comments; group monthly by year+month; note partial Dec 2011 |
+| 5 | "Loaded year" / periods | DECIDED | Loaded year = 2011 and latest six months = Jul-Dec 2011, written in the queries and named in SQL comments; first query prints the loaded dates; partial Dec 2011 noted |
 | 6 | Q1 vs Q11 | DECIDED | Implement exactly as worded in the PDF |
-| 7 | Materialized view | LATER | MySQL has none. Q20 = normal view (consider `ALGORITHM=TEMPTABLE`); simulate MV with `MV_STORE_QUARTERLY_SALES` summary table |
-| 8 | Time dimension grain | LATER | Leaning: one row per distinct event_time, `time_id = YYYYMMDDHHMM`; season not year-bound |
+| 7 | Materialized view | DECIDED | MySQL has none. Q20 = normal view; MV simulated with table `MV_STORE_QUARTERLY_SALES` (0.0 s vs 4.0 s through the view) |
+| 8 | Time dimension grain | DECIDED | One row per minute (17,282), `time_key = YYYYMMDDHHMM`; season not year-bound |
 | 9 | Tie-breaks | DECIDED | Strip descriptions, longest wins, tie -> first in file order. Country = earliest transaction by event_time, file order breaks ties |
 | 10 | Run time | DECIDED | Full peak run ~1 h; batched DW inserts; fast speed/short hour for development; PDF defaults for final run |
 
 ## Open items (user)
-- MySQL version, bonus cache table (yes/no), dataset download date, report format.
+- Bonus: not done (Live results go straight into the fact table). Download date: 3 November 2026. Report: Word + PDF.
 
 ## Cleaning counts (Phase 1)
 - Before cleaning: 541,909 rows
@@ -137,3 +137,8 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - Q17 WITH ROLLUP on 2011, GROUPING() labels product / supplier subtotal / store subtotal / grand total.
 - Q20 view STORE_QUARTERLY_SALES (store, year, quarter); ORDER BY on the reading SELECT.
 - Materialized view: MySQL has none; MV_STORE_QUARTERLY_SALES table created from the view (refresh = drop + create again). Create-DW.sql drops it too.
+
+## Report, ReadMe, data note (Phase 11)
+- report/Project-Report.docx and .pdf (10 pages): overview, dataset and cleaning counts, sales_mode and store rules, Master Data, working data, star schema (Figure 1), MESHJOIN and threads (Figure 2, report/architecture.png from docs/architecture.mmd), load shedding and shed counts, loading checks, analysis with Q19 spike comments, three shortcomings, what I learned, references.
+- Cleaning breakdown (rules counted in order): no CustomerID 135,080; cancellations 8,905; quantity <= 0 0; price <= 0 40. Each rule alone: 135,080 / 9,288 / 10,624 / 2,517. 37 countries, 0 Saturday rows.
+- README.md rewritten as the ReadMe (create database, prepare data, start, commands, queries, load used, citation and download date). data/Data_Note.txt: source, files, cleaning counts, rules, download date.
