@@ -110,3 +110,12 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - Commands: online, periodic, both, peak, non-peak, speed peak N, speed non-peak N, status, help, quit. Main thread reads commands; LoaderThread drains the output queue.
 - "online" holds the periodic groups; when periodic/both is typed again the waiting group is released at once, then one per hour again.
 - Program keeps accepting commands after all transactions are processed (PDF 9.5).
+- Whole carts everywhere for periodic sales (so a cart is never split between MESHJOIN and the shed table):
+  - PeriodicThread puts or sheds a cart as one unit (try_put_cart).
+  - Eviction from the buffer takes the newest whole periodic cart.
+  - take_chunk takes periodic carts whole; a cart that does not fit in the rest of the chunk waits for the next iteration, so a chunk can be a little under 500. Found by test_shedding.py on real data (1 cart split before the fix, 0 after).
+  - read_shed does not cut a periodic cart; a cart that does not fit stays on disk for the next chunk.
+  - Exception: a single cart bigger than 500 rows (one chunk) is cut, because it can never fit.
+- Online sales are shed and read back one transaction at a time (they arrive one at a time).
+- conn.autocommit = True on every connection, so a thread's reads see what other threads wrote (status showed an old shed count without it).
+- Tests on real data: test_shedding.py shed 14,394 periodic + 1,339 online, nothing lost, 0 carts split; test_readback.py read back all 15,733 in non-peak, online-flagged first, all processing_mode Shed, all enriched.
