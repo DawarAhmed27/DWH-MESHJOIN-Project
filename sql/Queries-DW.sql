@@ -175,7 +175,7 @@ ORDER BY month, day_type, rank_no;
 
 
 -- Q12. Quarter-to-quarter revenue growth (%) for each store in 2011.
--- Q1 2011 has no previous quarter in 2011, so its growth is NULL.
+-- The first quarter of 2011 has no previous quarter in 2011, so its growth is NULL.
 WITH quarterly AS (
     SELECT s.store_name, t.quarter, SUM(f.revenue) AS revenue
     FROM fact_sales f

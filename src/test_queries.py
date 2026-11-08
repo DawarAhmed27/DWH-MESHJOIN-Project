@@ -19,9 +19,9 @@ with open(os.path.join(PROJECT_DIR, "sql", "Queries-DW.sql"), encoding="utf-8") 
 # split into statements; the "-- Qn." comment line above each one is its title
 statements, title, lines = [], "", []
 for line in text.splitlines():
-    if line.startswith("-- Q") and not lines:
+    if line.startswith(("-- Q", "-- Check", "-- Materialized")) and not lines:
         title = line[3:]
-    elif not line.startswith("--"):
+    elif line.strip() and not line.startswith("--"):
         lines.append(line)
         if line.rstrip().endswith(";"):
             sql = "\n".join(lines).strip().rstrip(";")
