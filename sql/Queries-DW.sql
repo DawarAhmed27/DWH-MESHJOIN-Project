@@ -242,8 +242,8 @@ ORDER BY store_name, supplier_name, year, month;
 -- Q16. Top 5 product pairs bought together. A shopping cart = one transaction_id.
 -- cart: DISTINCT, so a product listed twice in one cart counts once.
 -- A pair can never be in more carts than either of its two products, so only
--- products bought in at least 200 carts can reach the top 5 (each of the top
--- 5 pairs is in more than 200 carts; if the 5th count were below 200, lower 200).
+-- products bought in at least 400 carts can reach the top 5: on the loaded
+-- data the 5th pair is in 519 carts (if the 5th count were below 400, lower 400).
 -- product_key a < b, so each pair is counted once (not A-B and B-A).
 -- Grouping uses only the two integer keys; names are added to the 5 rows at the end.
 WITH cart AS (
@@ -254,7 +254,7 @@ popular AS (
     SELECT product_key
     FROM cart
     GROUP BY product_key
-    HAVING COUNT(*) >= 200
+    HAVING COUNT(*) >= 400
 ),
 popular_cart AS (
     SELECT c.transaction_id, c.product_key
