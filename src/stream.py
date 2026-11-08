@@ -12,13 +12,14 @@ from collections import deque
 
 
 class Settings:
-    """Values the user can change while the program runs (commands: Phase 8)."""
+    """Values the user can change while the program runs (commands, Phase 8)."""
 
     def __init__(self, peak_tps=80, nonpeak_tps=10, hour_seconds=60, mode="peak"):
         self.peak_tps = peak_tps
         self.nonpeak_tps = nonpeak_tps
         self.hour_seconds = hour_seconds
         self.mode = mode                      # "peak" or "non-peak"
+        self.source = "both"                  # "online", "periodic" or "both"
 
     def tps(self):
         """Transactions per second right now."""
@@ -105,6 +106,10 @@ class OnlineThread(threading.Thread):
         next_time = time.time()
         with open(self.path, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
+                # command "periodic": pause the stream reader
+                while self.settings.source == "periodic" and not self.stop_event.is_set():
+                    time.sleep(0.05)
+                    next_time = time.time()
                 if self.stop_event.is_set():
                     break
                 if not self.buffer.put_online(to_transaction(row, "Live"), self.stop_event):
@@ -126,7 +131,9 @@ class PeriodicThread(threading.Thread):
     staging table, marks it released, and sends its transactions into the
     stream buffer. Hour k starts k * hour_seconds after the thread starts.
     If a group is still being fed when the next hour comes, the next group
-    waits behind it (decision Q4)."""
+    waits behind it (decision Q4).
+    Command "online": no group is released. When periodic or both is typed
+    again, the waiting group is released at once, then one per hour again."""
 
     def __init__(self, db_params, buffer, settings, stop_event, groups=48):
         super().__init__(name="PeriodicThread", daemon=True)
@@ -143,13 +150,17 @@ class PeriodicThread(threading.Thread):
         import db                         # own MySQL connection for this thread
         conn = db.connect(*self.db_params)
         start = time.time()
+        next_release = start                  # group 0 at once
         for k in range(self.groups):
-            # wait for hour k
-            while time.time() < start + k * self.settings.hour_seconds:
+            # wait for hour k (and while the source is "online")
+            while time.time() < next_release or self.settings.source == "online":
                 if self.stop_event.is_set():
                     conn.close()
                     return
                 time.sleep(0.05)
+            if time.time() - next_release > 1:    # held back by "online": restart the hour clock
+                next_release = time.time()
+            next_release += self.settings.hour_seconds
 
             rows = db.release_group(conn, k)
             self.log.append((k, len(rows), round(time.time() - start, 1)))

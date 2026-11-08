@@ -148,7 +148,7 @@ import time
 class MeshJoinThread(threading.Thread):
     """Runs MESHJOIN iterations in a loop: take a chunk (up to 500) from the
     stream buffer, iterate, send finished transactions to the output queue.
-    Stops when both feeding threads are done and everything has left the room."""
+    Keeps running until the quit command (PDF 9.5)."""
 
     def __init__(self, db_params, buffer, output, stop_event, feeders):
         super().__init__(name="MeshJoinThread", daemon=True)
@@ -164,6 +164,11 @@ class MeshJoinThread(threading.Thread):
     def feeders_done(self):
         return all(f.finished for f in self.feeders)
 
+    def all_processed(self):
+        """Both feeders finished, buffer empty, nothing left in the room."""
+        return (self.feeders_done() and self.buffer.size() == 0
+                and self.mj is not None and not self.mj.queue)
+
     def run(self):
         conn = db.connect(*self.db_params)   # own MySQL connection for this thread
         self.mj = MeshJoin(conn)
@@ -173,8 +178,6 @@ class MeshJoinThread(threading.Thread):
                 self.processed += send_to_output(self.mj.iterate(chunk), self.output)
                 if not chunk:
                     time.sleep(0.05)      # nothing new arrived: don't hammer the disk
-            elif self.feeders_done() and self.buffer.size() == 0:
-                break                     # all sales have passed through the room
             else:
                 time.sleep(0.05)          # room empty, waiting for the next arrivals
         conn.close()

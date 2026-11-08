@@ -4,6 +4,7 @@ Phase 6: ask for the connection details, create the tables, clean the file,
 prepare the Master Data, load it, write the online file and load the 48
 periodic groups into the staging table.
 Phase 7: start the OnlineThread, PeriodicThread and MeshJoinThread.
+Phase 8: accept commands while the threads run (type help for the list).
 
 Run:  python src/main.py   [--peak 80] [--nonpeak 10] [--hour 60] [--mode peak]
 """
@@ -14,7 +15,6 @@ import queue
 import sys
 import threading
 import time
-from collections import Counter
 from getpass import getpass
 
 import cleaning
@@ -24,6 +24,7 @@ import meshjoin
 import splitting
 import stream
 import working_data
+from loader import LoaderThread
 
 STREAM_BUFFER_LIMIT = 1000
 
@@ -149,9 +150,33 @@ def main():
                 expected=len(online) + len(periodic))
 
 
+HELP = """Commands:
+  online             online stream only (no periodic groups)
+  periodic           periodic groups only (online stream paused)
+  both               both (online first)
+  peak               fast speed, shedding allowed
+  non-peak           slow speed, shed transactions processed
+  speed peak N       set the peak speed to N transactions/second
+  speed non-peak N   set the non-peak speed to N transactions/second
+  status             show the current state
+  help               show this list
+  quit               stop the threads and close the program"""
+
+
+def print_status(s, buffer, mesh, online, periodic, loader, conn):
+    m = mesh.mj
+    print(f"Mode: {s.mode}   Source: {s.source}   "
+          f"Speed: {s.tps()}/s (peak {s.peak_tps}/s, non-peak {s.nonpeak_tps}/s)")
+    print(f"Stream buffer: {buffer.size():,} / {buffer.limit:,}")
+    print(f"In H (MESHJOIN memory): {m.in_memory() if m else 0:,}   iterations: {m.iterations if m else 0:,}")
+    print(f"Still on shed disk: {db.count(conn, 'shed_table'):,}")
+    print(f"Online sent: {online.sent:,}   Periodic groups released: {len(periodic.log)} / 48")
+    print(f"Out of MESHJOIN: {loader.received:,}   by processing mode: {dict(loader.by_processing_mode)}")
+
+
 def run_threads(cfg, db_params, online_file, expected):
-    """Phase 7: OnlineThread + PeriodicThread feed the stream buffer,
-    MeshJoinThread joins with the master data, finished rows go to `output`."""
+    """Phase 7 threads + Phase 8 commands. The main thread reads commands;
+    the LoaderThread takes finished transactions from `output`."""
     settings = stream.Settings(cfg.peak, cfg.nonpeak, cfg.hour, cfg.mode)
     buffer = stream.StreamBuffer(STREAM_BUFFER_LIMIT)
     output = queue.Queue()
@@ -160,37 +185,64 @@ def run_threads(cfg, db_params, online_file, expected):
     online = stream.OnlineThread(online_file, buffer, settings, stop)
     periodic = stream.PeriodicThread(db_params, buffer, settings, stop)
     mesh = meshjoin.MeshJoinThread(db_params, buffer, output, stop, [online, periodic])
-    for t in (online, periodic, mesh):
+    loader = LoaderThread(output, stop)
+    for t in (online, periodic, mesh, loader):
         t.start()
-
-    # until Phase 9 loads the DW: count and check what comes out
-    received, stores, unmatched = 0, Counter(), 0
+    conn = db.connect(*db_params)            # main thread's own connection (for status)
     start = time.time()
-    last_print = 0
-    while mesh.is_alive():
-        time.sleep(0.5)
-        while not output.empty():
-            t = output.get()
-            received += 1
-            stores[t["store_id"]] += 1
-            unmatched += not (t["customer_matched"] and t["product_matched"])
-        if time.time() - last_print >= 5:
-            last_print = time.time()
-            m = mesh.mj
-            print(f"[{time.time() - start:6.0f} s] online sent {online.sent:,} | "
-                  f"periodic groups {len(periodic.log)}/48 | buffer {buffer.size():,} | "
-                  f"in MESHJOIN {m.in_memory() if m else 0:,} | iterations {m.iterations if m else 0:,} | "
-                  f"out {received:,}")
-    while not output.empty():
-        t = output.get()
-        received += 1
-        stores[t["store_id"]] += 1
-        unmatched += not (t["customer_matched"] and t["product_matched"])
+    print("\n" + HELP + "\n")
 
-    print(f"\nAll threads finished in {time.time() - start:.0f} s")
-    print(f"Transactions out of MESHJOIN: {received:,} (expected {expected:,})")
-    print(f"Not fully enriched: {unmatched}")
-    print("Rows per store:", dict(sorted(stores.items())))
+    # tell the user once when every transaction has gone through
+    def watch():
+        while not stop.is_set():
+            if mesh.all_processed() and output.empty() and loader.received == expected:
+                print(f"\nAll {expected:,} transactions processed in {time.time() - start:.0f} s. "
+                      "Type status or quit.\n> ", end="", flush=True)
+                return
+            time.sleep(0.5)
+    threading.Thread(target=watch, daemon=True).start()
+
+    while True:
+        try:
+            words = input("> ").strip().lower().split()
+        except (EOFError, KeyboardInterrupt):
+            words = ["quit"]
+        if not words:
+            continue
+        cmd = words[0]
+        if cmd in ("online", "periodic", "both"):
+            settings.source = cmd
+            print(f"Source is now: {cmd}")
+        elif cmd in ("peak", "non-peak"):
+            settings.mode = cmd
+            print(f"Mode is now: {cmd} ({settings.tps()} transactions/second)")
+        elif cmd == "speed" and len(words) == 3 and words[1] in ("peak", "non-peak") \
+                and words[2].isdigit() and int(words[2]) > 0:
+            if words[1] == "peak":
+                settings.peak_tps = int(words[2])
+            else:
+                settings.nonpeak_tps = int(words[2])
+            print(f"{words[1]} speed is now {words[2]} transactions/second")
+        elif cmd == "status":
+            print_status(settings, buffer, mesh, online, periodic, loader, conn)
+        elif cmd == "help":
+            print(HELP)
+        elif cmd == "quit":
+            break
+        else:
+            print("Unknown command. Type help for the list.")
+
+    # quit: stop all threads, then print the summary
+    print("Stopping the threads ...")
+    stop.set()
+    for t in (online, periodic, mesh, loader):
+        t.join(timeout=5)
+    conn.close()
+    print(f"Ran for {time.time() - start:.0f} s")
+    print(f"Transactions out of MESHJOIN: {loader.received:,} (expected {expected:,})")
+    print(f"By processing mode: {dict(loader.by_processing_mode)}")
+    print(f"Not fully enriched: {loader.unmatched}")
+    print("Rows per store:", dict(sorted(loader.stores.items())))
 
 
 if __name__ == "__main__":

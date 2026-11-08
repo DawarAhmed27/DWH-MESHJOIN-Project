@@ -102,3 +102,11 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - Store added outside MESHJOIN from the in-memory store list; finished rows go to a thread-safe output queue (loaded in Phase 9).
 - MeshJoinThread iterates without new chunks while chunks remain; stops when feeders finished, buffer empty, MESHJOIN empty.
 - Full real-data run (--peak 5000 --hour 2): 397,884 out, 0 not fully enriched, threads 133 s.
+
+## Load shedding and commands (Phase 8)
+- Instructor answer (class question "what if even the online stream must be shed?"): always shed periodic first, then online.
+- Peak shedding order: incoming periodic cart that does not fit -> periodic carts already waiting in the buffer (newest first) -> the online transaction itself. Periodic carts are shed whole; online one transaction at a time.
+- Non-peak: nothing is shed; threads wait for space. MeshJoinThread tops up chunks with fewer than 500 from shed_table (online-flagged first, then periodic), processing_mode "Shed", and deletes the rows it read.
+- Commands: online, periodic, both, peak, non-peak, speed peak N, speed non-peak N, status, help, quit. Main thread reads commands; LoaderThread drains the output queue.
+- "online" holds the periodic groups; when periodic/both is typed again the waiting group is released at once, then one per hour again.
+- Program keeps accepting commands after all transactions are processed (PDF 9.5).
