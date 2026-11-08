@@ -240,31 +240,26 @@ ORDER BY store_name, supplier_name, year, month;
 
 
 -- Q16. Top 5 product pairs bought together. A shopping cart = one transaction_id.
--- cart: DISTINCT, so a product listed twice in one cart counts once.
+-- The fact table is joined to itself on transaction_id (uses the index on it).
+-- COUNT(DISTINCT transaction_id): each cart counts once per pair, even if a
+-- product is listed twice in that cart. b.product_key > a.product_key, so each
+-- pair is counted once (not A-B and B-A).
 -- A pair can never be in more carts than either of its two products, so only
 -- products bought in at least 400 carts can reach the top 5: on the loaded
 -- data the 5th pair is in 519 carts (if the 5th count were below 400, lower 400).
--- product_key a < b, so each pair is counted once (not A-B and B-A).
--- Grouping uses only the two integer keys; names are added to the 5 rows at the end.
-WITH cart AS (
-    SELECT DISTINCT transaction_id, product_key
-    FROM fact_sales
-),
-popular AS (
+WITH popular AS (
     SELECT product_key
-    FROM cart
+    FROM fact_sales
     GROUP BY product_key
-    HAVING COUNT(*) >= 400
-),
-popular_cart AS (
-    SELECT c.transaction_id, c.product_key
-    FROM cart c
-    JOIN popular p ON p.product_key = c.product_key
+    HAVING COUNT(DISTINCT transaction_id) >= 400
 ),
 pairs AS (
-    SELECT a.product_key AS key_a, b.product_key AS key_b, COUNT(*) AS carts_together
-    FROM popular_cart a
-    JOIN popular_cart b ON b.transaction_id = a.transaction_id AND a.product_key < b.product_key
+    SELECT a.product_key AS key_a, b.product_key AS key_b,
+           COUNT(DISTINCT a.transaction_id) AS carts_together
+    FROM fact_sales a
+    JOIN fact_sales b ON b.transaction_id = a.transaction_id AND b.product_key > a.product_key
+    WHERE a.product_key IN (SELECT product_key FROM popular)
+      AND b.product_key IN (SELECT product_key FROM popular)
     GROUP BY a.product_key, b.product_key
     ORDER BY carts_together DESC, a.product_key, b.product_key
     LIMIT 5
