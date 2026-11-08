@@ -125,3 +125,4 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - LoaderThread: batches of up to 1,000 or 0.5 s; per batch, new dimension rows first, then the fact rows, one commit. Known dimension values kept in maps id -> surrogate key (DW keys, not the Master Data).
 - No bonus: Live results go straight into the fact table.
 - quit: the loader loads what is left in the output queue before the program closes.
+- Periodic on the hour (9.3): sales_mode Online (Live, and online rows read back from shed) loaded at once; sales_mode Periodic (Periodic, and periodic rows read back from shed) wait in a list and are loaded together at every hour tick of the LoaderThread (every hour_seconds from its start). A group released at hour k is joined during hour k and loaded at the next tick. quit loads what is still waiting.

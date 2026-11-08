@@ -8,6 +8,13 @@ whatever arrived in 0.5 s). For each batch, in one database transaction:
 4. commit
 So a dimension row is always in the DW before the fact that points to it (PDF 7).
 
+Step 9.3: online sales (sales_mode Online) are loaded as soon as they are
+joined. Periodic sales (sales_mode Periodic, also the ones read back from the
+shed table) wait in a list and are loaded together once every simulated hour
+(PDF 7: "the periodic sales data must be loaded periodically using the same
+interval"). A group extracted at hour k is joined during hour k and loaded at
+the next hour tick.
+
 Which dimension values are already loaded is kept in small maps
 (customer_id -> customer_key, ...). These are DW keys, not the Master Data;
 the Master Data stays on disk and is only read by MESHJOIN.
@@ -41,11 +48,14 @@ def insert_sql(table, columns):
 
 
 class LoaderThread(threading.Thread):
-    def __init__(self, output, stop_event, db_params):
+    def __init__(self, output, stop_event, db_params, settings):
         super().__init__(name="LoaderThread", daemon=True)
         self.output = output
         self.stop_event = stop_event
         self.db_params = db_params
+        self.settings = settings                         # hour_seconds
+        self.waiting = []                                # periodic sales waiting for the hour
+        self.hourly_loads = []                           # (hour tick, rows loaded)
         self.keys = {name: {} for name in DIMENSIONS}   # id -> surrogate key, per dimension
         self.received = 0
         self.loaded = 0                                  # fact rows committed
@@ -56,22 +66,36 @@ class LoaderThread(threading.Thread):
     def run(self):
         conn = db.connect(*self.db_params)
         conn.autocommit = False             # one commit per batch: dimensions + facts together
-        batch = []
+        batch = []                          # online sales, loaded at once
         last_flush = time.time()
+        next_hour = time.time() + self.settings.hour_seconds
         while not self.stop_event.is_set() or not self.output.empty():
             try:
                 t = self.output.get(timeout=0.1)
-                batch.append(t)
                 self.count(t)
+                if t["sales_mode"] == "Online":
+                    batch.append(t)
+                else:
+                    self.waiting.append(t)  # periodic: wait for the hour
             except queue.Empty:
                 pass
             if batch and (len(batch) >= BATCH_ROWS or time.time() - last_flush >= BATCH_SECONDS):
                 self.load(conn, batch)
                 batch = []
                 last_flush = time.time()
+            if time.time() >= next_hour:    # hour tick: load the periodic sales together
+                self.load_waiting(conn)
+                next_hour += self.settings.hour_seconds
         if batch:                           # quit: load what is left
             self.load(conn, batch)
+        self.load_waiting(conn)
         conn.close()
+
+    def load_waiting(self, conn):
+        rows, self.waiting = self.waiting, []
+        for i in range(0, len(rows), BATCH_ROWS):
+            self.load(conn, rows[i:i + BATCH_ROWS])
+        self.hourly_loads.append((len(self.hourly_loads) + 1, len(rows)))
 
     def count(self, t):
         self.received += 1

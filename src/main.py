@@ -177,7 +177,9 @@ def print_status(s, buffer, mesh, online, periodic, loader, conn):
     print(f"Read back from shed (non-peak): {mesh.read_back:,}")
     print(f"Online sent: {online.sent:,}   Periodic groups released: {len(periodic.log)} / 48")
     print(f"Out of MESHJOIN: {loader.received:,}   by processing mode: {dict(loader.by_processing_mode)}")
-    print(f"Loaded into the DW: {loader.loaded:,} fact rows")
+    print(f"Loaded into the DW: {loader.loaded:,} fact rows   "
+          f"periodic waiting for the hour: {len(loader.waiting):,}   "
+          f"hourly loads: {len(loader.hourly_loads)} (last {loader.hourly_loads[-1][1] if loader.hourly_loads else 0:,} rows)")
 
 
 def run_threads(cfg, db_params, online_file, expected):
@@ -191,7 +193,7 @@ def run_threads(cfg, db_params, online_file, expected):
     online = stream.OnlineThread(online_file, buffer, settings, stop, db_params)
     periodic = stream.PeriodicThread(db_params, buffer, settings, stop)
     mesh = meshjoin.MeshJoinThread(db_params, buffer, output, stop, [online, periodic], settings)
-    loader = LoaderThread(output, stop, db_params)
+    loader = LoaderThread(output, stop, db_params, settings)
     for t in (online, periodic, mesh, loader):
         t.start()
     conn = db.connect(*db_params)            # main thread's own connection (for status)
