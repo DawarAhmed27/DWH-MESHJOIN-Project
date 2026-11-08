@@ -41,7 +41,7 @@ class StreamBuffer:
             return len(self.online) + len(self.periodic)
 
     def put_online(self, row, stop_event):
-        """Add one online transaction; wait while the buffer is full."""
+        """Non-peak: add one online transaction; wait while the buffer is full."""
         with self.lock:
             while len(self.online) + len(self.periodic) >= self.limit:
                 if stop_event.is_set():
@@ -52,8 +52,7 @@ class StreamBuffer:
             return True
 
     def put_periodic(self, row, stop_event):
-        """Add one periodic transaction; wait while the buffer is full.
-        (Phase 8: in peak time the overflow is shed instead of waiting.)"""
+        """Non-peak: add one periodic transaction; wait while the buffer is full."""
         with self.lock:
             while len(self.online) + len(self.periodic) >= self.limit:
                 if stop_event.is_set():
@@ -62,6 +61,34 @@ class StreamBuffer:
             self.periodic.append(row)
             self.lock.notify_all()
             return True
+
+    def try_put_cart(self, cart):
+        """Peak (step 8.2): put a whole periodic cart only if it fits.
+        Returns False if it does not fit; the caller then sheds the cart."""
+        with self.lock:
+            if len(self.online) + len(self.periodic) + len(cart) > self.limit:
+                return False
+            self.periodic.extend(cart)
+            self.lock.notify_all()
+            return True
+
+    def put_online_peak(self, row):
+        """Peak (step 8.2): put an online transaction without waiting.
+        If the buffer is full, the newest periodic cart in the buffer is taken
+        out to make room (periodic is shed before online).
+        Returns (put, evicted): put is False if there was still no room."""
+        with self.lock:
+            evicted = []
+            if len(self.online) + len(self.periodic) >= self.limit and self.periodic:
+                cart_id = self.periodic[-1]["transaction_id"]
+                while self.periodic and self.periodic[-1]["transaction_id"] == cart_id:
+                    evicted.append(self.periodic.pop())
+                evicted.reverse()
+            if len(self.online) + len(self.periodic) >= self.limit:
+                return False, evicted         # only online inside: shed this one too
+            self.online.append(row)
+            self.lock.notify_all()
+            return True, evicted
 
     def take_chunk(self, max_rows=500):
         """MESHJOIN side: take up to max_rows, online first (PDF priority)."""
@@ -93,16 +120,21 @@ class OnlineThread(threading.Thread):
     """Reads the online file top to bottom and sends each transaction into the
     stream buffer at settings.tps() transactions per second."""
 
-    def __init__(self, path, buffer, settings, stop_event):
+    def __init__(self, path, buffer, settings, stop_event, db_params):
         super().__init__(name="OnlineThread", daemon=True)
         self.path = path
         self.buffer = buffer
         self.settings = settings
         self.stop_event = stop_event
-        self.sent = 0
+        self.db_params = db_params        # own MySQL connection, for shedding
+        self.sent = 0                     # put into the stream buffer
+        self.shed_online = 0              # online transactions shed (peak, last resort)
+        self.shed_periodic = 0            # periodic transactions taken out of the buffer to make room
         self.finished = False
 
     def run(self):
+        import db
+        conn = db.connect(*self.db_params)
         next_time = time.time()
         with open(self.path, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
@@ -112,9 +144,23 @@ class OnlineThread(threading.Thread):
                     next_time = time.time()
                 if self.stop_event.is_set():
                     break
-                if not self.buffer.put_online(to_transaction(row, "Live"), self.stop_event):
-                    break
-                self.sent += 1
+                t = to_transaction(row, "Live")
+                if self.settings.mode == "peak":
+                    # peak: never wait. Shed periodic first, then online.
+                    put, evicted = self.buffer.put_online_peak(t)
+                    if evicted:
+                        db.shed_rows(conn, evicted)
+                        self.shed_periodic += len(evicted)
+                    if put:
+                        self.sent += 1
+                    else:
+                        db.shed_rows(conn, [t])
+                        self.shed_online += 1
+                else:
+                    # non-peak: wait for space, nothing is shed
+                    if not self.buffer.put_online(t, self.stop_event):
+                        break
+                    self.sent += 1
 
                 # keep the speed: one transaction every 1/tps seconds
                 next_time += 1.0 / self.settings.tps()
@@ -123,6 +169,7 @@ class OnlineThread(threading.Thread):
                     time.sleep(delay)
                 else:
                     next_time = time.time()   # we were held up (buffer full): don't rush to catch up
+        conn.close()
         self.finished = True
 
 
@@ -142,7 +189,8 @@ class PeriodicThread(threading.Thread):
         self.settings = settings
         self.stop_event = stop_event
         self.groups = groups
-        self.sent = 0
+        self.sent = 0                     # put into the stream buffer
+        self.shed = 0                     # periodic transactions shed (peak)
         self.log = []                     # (group, rows, seconds after start)
         self.finished = False
 
@@ -164,10 +212,25 @@ class PeriodicThread(threading.Thread):
 
             rows = db.release_group(conn, k)
             self.log.append((k, len(rows), round(time.time() - start, 1)))
+            # whole shopping carts, in the order they appear
+            carts = {}
             for row in rows:
-                if not self.buffer.put_periodic(to_transaction(row, "Periodic"), self.stop_event):
-                    conn.close()
-                    return
-                self.sent += 1
+                carts.setdefault(row["transaction_id"], []).append(to_transaction(row, "Periodic"))
+
+            for cart in carts.values():
+                if self.settings.mode == "peak":
+                    # peak: the cart goes in only if it fits; otherwise the whole cart is shed
+                    if self.buffer.try_put_cart(cart):
+                        self.sent += len(cart)
+                    else:
+                        db.shed_rows(conn, cart)
+                        self.shed += len(cart)
+                else:
+                    # non-peak: wait for space, nothing is shed
+                    for t in cart:
+                        if not self.buffer.put_periodic(t, self.stop_event):
+                            conn.close()
+                            return
+                        self.sent += 1
         conn.close()
         self.finished = True

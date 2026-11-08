@@ -1,5 +1,7 @@
 """MySQL helpers: connect, run the Create-DW script, insert rows in batches."""
 
+from datetime import datetime
+
 import mysql.connector
 
 BATCH_SIZE = 5000
@@ -91,3 +93,19 @@ def count(conn, table):
     n = cur.fetchone()[0]
     cur.close()
     return n
+
+
+SHED_COLUMNS = ["transaction_id", "customer_id", "product_id", "quantity",
+                "unit_price", "event_time", "sales_mode"]
+
+
+def shed_rows(conn, transactions):
+    """Load shedding: write transactions to shed_table (disk) with the time
+    they were shed. sales_mode is the transaction's flag (Online / Periodic)."""
+    shed_time = datetime.now()
+    rows = [[t[c] for c in SHED_COLUMNS] + [shed_time] for t in transactions]
+    cur = conn.cursor()
+    cur.executemany(f"INSERT INTO shed_table ({', '.join(SHED_COLUMNS)}, shed_time) "
+                    f"VALUES ({', '.join(['%s'] * (len(SHED_COLUMNS) + 1))})", rows)
+    conn.commit()
+    cur.close()

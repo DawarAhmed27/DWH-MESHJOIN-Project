@@ -170,6 +170,9 @@ def print_status(s, buffer, mesh, online, periodic, loader, conn):
     print(f"Stream buffer: {buffer.size():,} / {buffer.limit:,}")
     print(f"In H (MESHJOIN memory): {m.in_memory() if m else 0:,}   iterations: {m.iterations if m else 0:,}")
     print(f"Still on shed disk: {db.count(conn, 'shed_table'):,}")
+    print(f"Shed in peak: online {online.shed_online:,}, "
+          f"periodic {online.shed_periodic + periodic.shed:,} "
+          f"(arriving {periodic.shed:,}, taken out of the buffer {online.shed_periodic:,})")
     print(f"Online sent: {online.sent:,}   Periodic groups released: {len(periodic.log)} / 48")
     print(f"Out of MESHJOIN: {loader.received:,}   by processing mode: {dict(loader.by_processing_mode)}")
 
@@ -182,7 +185,7 @@ def run_threads(cfg, db_params, online_file, expected):
     output = queue.Queue()
     stop = threading.Event()
 
-    online = stream.OnlineThread(online_file, buffer, settings, stop)
+    online = stream.OnlineThread(online_file, buffer, settings, stop, db_params)
     periodic = stream.PeriodicThread(db_params, buffer, settings, stop)
     mesh = meshjoin.MeshJoinThread(db_params, buffer, output, stop, [online, periodic])
     loader = LoaderThread(output, stop)
@@ -243,6 +246,7 @@ def run_threads(cfg, db_params, online_file, expected):
     print(f"By processing mode: {dict(loader.by_processing_mode)}")
     print(f"Not fully enriched: {loader.unmatched}")
     print("Rows per store:", dict(sorted(loader.stores.items())))
+    print(f"Shed in peak: online {online.shed_online:,}, periodic {online.shed_periodic + periodic.shed:,}")
 
 
 if __name__ == "__main__":

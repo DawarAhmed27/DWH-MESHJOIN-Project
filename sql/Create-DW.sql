@@ -66,8 +66,8 @@ CREATE TABLE periodic_sales_data (
     CONSTRAINT chk_release_hour  CHECK (release_hour BETWEEN 0 AND 47)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- Shed table (disk): periodic transactions moved out of memory in peak
--- time; processed later in non-peak time
+-- Shed table (disk): transactions moved out of memory in peak time
+-- (periodic first, online last); processed later in non-peak time
 CREATE TABLE shed_table (
     shed_id         INT            NOT NULL AUTO_INCREMENT,
     transaction_id  VARCHAR(10)    NOT NULL,
