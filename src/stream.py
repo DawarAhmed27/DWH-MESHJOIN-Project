@@ -91,13 +91,25 @@ class StreamBuffer:
             return True, evicted
 
     def take_chunk(self, max_rows=500):
-        """MESHJOIN side: take up to max_rows, online first (PDF priority)."""
+        """MESHJOIN side: take up to max_rows, online first (PDF priority),
+        then whole periodic carts."""
         chunk = []
         with self.lock:
             while self.online and len(chunk) < max_rows:
                 chunk.append(self.online.popleft())
+            # periodic: whole carts only, so a cart is never split between
+            # MESHJOIN and the shed table (only a cart bigger than the room is cut)
             while self.periodic and len(chunk) < max_rows:
-                chunk.append(self.periodic.popleft())
+                cart_id = self.periodic[0]["transaction_id"]
+                size = 0
+                for t in self.periodic:
+                    if t["transaction_id"] != cart_id:
+                        break
+                    size += 1
+                if chunk and len(chunk) + size > max_rows:
+                    break                     # does not fit: next iteration
+                for _ in range(min(size, max_rows - len(chunk))):
+                    chunk.append(self.periodic.popleft())
             self.lock.notify_all()            # wake a thread waiting for space
         return chunk
 
