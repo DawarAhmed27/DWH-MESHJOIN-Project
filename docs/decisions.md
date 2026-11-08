@@ -5,7 +5,7 @@ Status legend: **ASK** = asked to instructor, **DECIDED** = our choice (document
 | # | Topic | Status | Decision |
 |---|---|---|---|
 | 1 | Meaning of `processing_mode` | CONFIRMED | Live / Periodic / Shed: how the row was processed (see instructor answers below) |
-| 2 | MESHJOIN with two master tables | LEANING A | Proposed: each iteration reads one partition of each table; H has two indexes over the same chunk; chunk leaves after max(#cust, #prod) iterations; mark product match done to avoid double enrichment |
+| 2 | MESHJOIN with two master tables | DECIDED: A | Proposed: each iteration reads one partition of each table; H has two indexes over the same chunk; chunk leaves after max(#cust, #prod) iterations; mark product match done to avoid double enrichment |
 | 3 | ID text format for MD5 | DECIDED | CustomerID -> `str(int(x))` (e.g. "17850"); InvoiceNo/StockCode read as text, stripped, case kept. Assert no ".0" before hashing |
 | 4 | Periodic group > 1,000-row buffer | DECIDED | Peak: overflow shed to `shed_table` as whole carts. Non-peak: fed gradually, no shedding; shed rows drained when idle. Next group queues behind an unfinished one. Buffer has live + periodic queues; chunk takes live first |
 | 5 | "Loaded year" / periods | DECIDED | 2011 detected as `MAX(year)` in DW; dates named in SQL comments; group monthly by year+month; note partial Dec 2011 |
@@ -94,3 +94,11 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - Settings from the command line: --peak (80), --nonpeak (10), --hour (60 s), --mode (peak). Printed at startup and again before the threads.
 - Inserts with executemany in batches of 5,000. partition_no = row number // 500 (customers 9, products 8 partitions).
 - Verified: program outputs identical to the notebook files (customer, product, online, periodic CSVs; only Windows line endings differ). Full real-data preparation ~30 s (cleaning ~27 s is reading the xlsx).
+
+## MESHJOIN (Phase 7)
+- Option A implemented: 1 customer + 1 product partition per iteration, H_cust/H_prod, chunk stays max(9, 8) = 9 iterations, matched flags.
+- Stream buffer: online + periodic lines, limit 1,000, take_chunk(500) online first; threading.Condition.
+- PeriodicThread: group k at k * hour seconds; release_group sets released = 1; next group waits behind an unfinished one.
+- Store added outside MESHJOIN from the in-memory store list; finished rows go to a thread-safe output queue (loaded in Phase 9).
+- MeshJoinThread iterates without new chunks while chunks remain; stops when feeders finished, buffer empty, MESHJOIN empty.
+- Full real-data run (--peak 5000 --hour 2): 397,884 out, 0 not fully enriched, threads 133 s.
