@@ -133,7 +133,7 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - Top-N uses ROW_NUMBER with a tie-break on the id, so exactly 5 rows; Q8 uses RANK (only 3 city categories).
 - Q7 average purchase amount = average revenue per transaction (fact row).
 - Q14, Q15, Q19 use all loaded dates; Q15 months Dec 2010 to Dec 2011 in order.
-- Q16 counts distinct carts per product pair (DISTINCT transaction_id, product_key first; product_key a < b).
+- Q16 counts distinct carts per product pair (DISTINCT transaction_id, product_key first; product_key a < b). Speed: groups by the two integer keys only (names joined to the 5 result rows), and only products bought in at least 200 carts are paired; exact because a pair cannot be in more carts than either product and every top-5 pair is in more than 200 carts (the first version grouped by ids and names over all products and was too slow on the real data).
 - Q17 WITH ROLLUP on 2011, GROUPING() labels product / supplier subtotal / store subtotal / grand total.
 - Q20 view STORE_QUARTERLY_SALES (store, year, quarter); ORDER BY on the reading SELECT.
 - Materialized view: MySQL has none; MV_STORE_QUARTERLY_SALES table created from the view (refresh = drop + create again). Create-DW.sql drops it too.

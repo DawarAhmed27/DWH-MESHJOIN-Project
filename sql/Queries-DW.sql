@@ -240,22 +240,42 @@ ORDER BY store_name, supplier_name, year, month;
 
 
 -- Q16. Top 5 product pairs bought together. A shopping cart = one transaction_id.
--- DISTINCT first, so a product listed twice in one cart counts once;
+-- cart: DISTINCT, so a product listed twice in one cart counts once.
+-- A pair can never be in more carts than either of its two products, so only
+-- products bought in at least 200 carts can reach the top 5 (each of the top
+-- 5 pairs is in more than 200 carts; if the 5th count were below 200, lower 200).
 -- product_key a < b, so each pair is counted once (not A-B and B-A).
+-- Grouping uses only the two integer keys; names are added to the 5 rows at the end.
 WITH cart AS (
     SELECT DISTINCT transaction_id, product_key
     FROM fact_sales
+),
+popular AS (
+    SELECT product_key
+    FROM cart
+    GROUP BY product_key
+    HAVING COUNT(*) >= 200
+),
+popular_cart AS (
+    SELECT c.transaction_id, c.product_key
+    FROM cart c
+    JOIN popular p ON p.product_key = c.product_key
+),
+pairs AS (
+    SELECT a.product_key AS key_a, b.product_key AS key_b, COUNT(*) AS carts_together
+    FROM popular_cart a
+    JOIN popular_cart b ON b.transaction_id = a.transaction_id AND a.product_key < b.product_key
+    GROUP BY a.product_key, b.product_key
+    ORDER BY carts_together DESC, a.product_key, b.product_key
+    LIMIT 5
 )
 SELECT pa.product_id AS product_a, pa.product_name AS name_a,
        pb.product_id AS product_b, pb.product_name AS name_b,
-       COUNT(*) AS carts_together
-FROM cart a
-JOIN cart b ON b.transaction_id = a.transaction_id AND a.product_key < b.product_key
-JOIN dim_product pa ON pa.product_key = a.product_key
-JOIN dim_product pb ON pb.product_key = b.product_key
-GROUP BY a.product_key, b.product_key, pa.product_id, pa.product_name, pb.product_id, pb.product_name
-ORDER BY carts_together DESC, product_a, product_b
-LIMIT 5;
+       pairs.carts_together
+FROM pairs
+JOIN dim_product pa ON pa.product_key = pairs.key_a
+JOIN dim_product pb ON pb.product_key = pairs.key_b
+ORDER BY pairs.carts_together DESC, product_a, product_b;
 
 
 -- Q17. Revenue for 2011 by store, supplier and product with ROLLUP:
