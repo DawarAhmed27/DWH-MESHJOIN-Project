@@ -146,6 +146,28 @@ The queries can also be run from Python, which prints the time, row count and fi
 python src/test_queries.py
 ```
 
+## Control room (web front end, optional)
+
+The same program can be run and presented from the browser:
+
+```
+python app/server.py
+```
+
+The browser opens http://localhost:5000. The pages follow the project:
+
+| Page | What it does |
+|---|---|
+| Overview | line map of the pipeline, KPIs and charts of the loaded DW |
+| Setup | connection (password kept in memory only), settings with presets, data preparation step by step |
+| Live run | start the threads; source, mode and speed commands; live stream buffer, MESHJOIN partitions and queue, shed table, loader and event log |
+| Data warehouse | schema diagram and live row counts of every table |
+| Analysis | every statement of `Queries-DW.sql` with its SQL, result table, chart and time |
+| Checks | the checks of `test_dw.py` |
+
+"Presenter mode" opens step-by-step demo notes (what to show, what to say) with buttons that run each step;
+the arrow keys move between steps. The command-line program (`src/main.py`) is unchanged and still works on its own.
+
 ## Checks
 
 Run from the project folder after `main.py` (each asks for the MySQL password):

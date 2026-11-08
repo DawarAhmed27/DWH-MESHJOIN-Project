@@ -142,3 +142,9 @@ Keep the PDF formula exactly; explain in the report why stores 3 and 5 get about
 - report/Project-Report.docx and .pdf (10 pages): overview, dataset and cleaning counts, sales_mode and store rules, Master Data, working data, star schema (Figure 1), MESHJOIN and threads (Figure 2, report/architecture.png from docs/architecture.mmd), load shedding and shed counts, loading checks, analysis with Q19 spike comments, three shortcomings, what I learned, references.
 - Cleaning breakdown (rules counted in order): no CustomerID 135,080; cancellations 8,905; quantity <= 0 0; price <= 0 40. Each rule alone: 135,080 / 9,288 / 10,624 / 2,517. 37 countries, 0 Saturday rows.
 - README.md rewritten as the ReadMe (create database, prepare data, start, commands, queries, load used, citation and download date). data/Data_Note.txt: source, files, cleaning counts, rules, download date.
+
+## Control room (web front end)
+- app/server.py (Flask, local only on 127.0.0.1) imports the same src modules as main.py: Create-DW.sql, cleaning, splitting, Master Data, working data, the three threads and the LoaderThread; commands change the shared Settings exactly like the typed commands. main.py is unchanged.
+- app/static: one page (index.html, style.css, app.js), Chart.js 4.4.1 stored in app/static/vendor so it works without internet; fonts fall back to system fonts offline.
+- Pages: Overview, Setup, Live run, Data warehouse, Analysis (statements read from Queries-DW.sql), Checks (test_dw.py checks), Presenter mode with 12 demo steps.
+- Password typed in the page, kept in the server's memory only.

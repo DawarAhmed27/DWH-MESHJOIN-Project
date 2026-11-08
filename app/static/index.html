@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MESHJOIN Control Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="shell">
+
+  <!-- ===== rail: the line map ===== -->
+  <aside class="rail">
+    <div class="brand">
+      <div class="mark">
+        <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+          <circle cx="17" cy="17" r="15" fill="none" stroke="#6FC1D0" stroke-width="3"/>
+          <circle cx="17" cy="17" r="8" fill="none" stroke="#E7A54B" stroke-width="3" stroke-dasharray="4 3"/>
+          <circle cx="17" cy="17" r="3" fill="#fff"/>
+        </svg>
+        <b>MESHJOIN<br>Control Room</b>
+      </div>
+      <small>Near-real-time DW &middot; Online Retail</small>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-page="overview"><span class="stop"><i></i></span><span><span class="lbl">Overview</span><span class="sub">the project at a glance</span></span></button>
+      <button data-page="setup"><span class="stop"><i></i></span><span><span class="lbl">Setup</span><span class="sub">connect, settings, prepare</span></span></button>
+      <button data-page="live"><span class="stop"><i></i></span><span><span class="lbl">Live run</span><span class="sub">threads, MESHJOIN, shedding</span></span></button>
+      <button data-page="dw"><span class="stop"><i></i></span><span><span class="lbl">Data warehouse</span><span class="sub">star schema, tables</span></span></button>
+      <button data-page="analysis"><span class="stop"><i></i></span><span><span class="lbl">Analysis</span><span class="sub">Q1 &ndash; Q20, view, MV</span></span></button>
+      <button data-page="checks"><span class="stop"><i></i></span><span><span class="lbl">Checks</span><span class="sub">DW against working data</span></span></button>
+    </nav>
+    <div class="rail-foot">
+      <button class="btn" id="presentBtn" style="background:#22303C;border-color:#34485A;color:#fff;justify-content:center">&#9654; Presenter mode</button>
+      <span>Dawar Ahmed &middot; 24I-2533</span>
+    </div>
+    <svg class="rail-art" width="260" height="260" viewBox="0 0 260 260" aria-hidden="true">
+      <circle cx="130" cy="130" r="120" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="6 8"/>
+      <circle cx="130" cy="130" r="88" fill="none" stroke="#fff" stroke-width="2"/>
+      <circle cx="130" cy="130" r="56" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="2 6"/>
+    </svg>
+  </aside>
+
+  <!-- ===== main ===== -->
+  <div class="main">
+    <header class="top">
+      <div>
+        <h2 id="pageTitle">Overview</h2>
+        <div class="crumb" id="pageSub"></div>
+      </div>
+      <div class="spacer"></div>
+      <span class="pill" id="pillDb"><span class="dot"></span><span>Not connected</span></span>
+      <span class="pill" id="pillMode"><span class="dot"></span><span>&mdash;</span></span>
+      <span class="pill" id="pillRun"><span class="dot"></span><span>Idle</span></span>
+    </header>
+
+    <main class="view" id="view">
+
+      <!-- ===================== OVERVIEW ===================== -->
+      <section class="page" id="p-overview">
+        <div class="card hero">
+          <div class="eyebrow">DS3003 &amp; DS3004 &middot; Practical project</div>
+          <h1 style="margin-top:8px">A near-real-time and periodic data warehouse for a retail chain</h1>
+          <p>Online sales stream in one by one, store sales arrive once an hour. MESHJOIN joins both with the customer and product Master Data on disk, sheds store sales when the stream is too fast, and loads every sale into a MySQL star schema. Click a station to open that part.</p>
+          <svg class="metro" id="metro" viewBox="0 0 1200 230" role="img" aria-label="Pipeline from the Excel file to the data warehouse"></svg>
+        </div>
+        <div class="grid g4" id="kpis">
+          <div class="card kpi"><span class="l">Fact rows in the DW</span><span class="v num" id="k-rows">&mdash;</span><span class="l" id="k-rows-s">connect to read the DW</span></div>
+          <div class="card kpi"><span class="l">Revenue (quantity &times; price)</span><span class="v num" id="k-rev">&mdash;</span><span class="l">stored on the fact</span></div>
+          <div class="card kpi"><span class="l">Shopping carts</span><span class="v num" id="k-carts">&mdash;</span><span class="l">distinct transaction_id</span></div>
+          <div class="card kpi"><span class="l">Loaded dates</span><span class="v num" id="k-dates" style="font-size:19px">&mdash;</span><span class="l">loaded year = 2011</span></div>
+        </div>
+        <div class="grid g2">
+          <div class="card"><h3>Revenue by month</h3><div class="hint">Drill-down of the time dimension to year and month</div><div class="chartbox" style="height:240px;margin-top:10px"><canvas id="c-month"></canvas></div></div>
+          <div class="card"><h3>How each sale reached the DW</h3><div class="hint">processing_mode on the fact: Live, Periodic, or Shed (read back in non-peak)</div>
+            <div id="modeSplit" style="margin-top:18px"></div>
+            <h3 style="margin-top:22px">Revenue by store</h3>
+            <div id="storeBars" class="stack" style="margin-top:10px;gap:8px"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== SETUP ===================== -->
+      <section class="page" id="p-setup">
+        <div class="grid g2">
+          <div class="card stack">
+            <div><h3>1 &middot; Connect to MySQL</h3><div class="hint">The password stays in this program&rsquo;s memory only. The database is created if it does not exist.</div></div>
+            <div class="grid g2" style="gap:12px">
+              <label class="f">Host<input id="f-host" value="localhost"></label>
+              <label class="f">Port<input id="f-port" value="3306" inputmode="numeric"></label>
+              <label class="f">Database<input id="f-db" value="dwh_project"></label>
+              <label class="f">User<input id="f-user" value="root"></label>
+            </div>
+            <label class="f">Password<input id="f-pass" type="password" autocomplete="current-password"></label>
+            <label class="f">Transactional file (Online Retail.xlsx or its folder)<input id="f-file" class="mono" style="font-size:12.5px"></label>
+            <div class="row"><button class="btn primary" id="connectBtn">Connect</button><span id="connectMsg" class="small muted"></span></div>
+          </div>
+          <div class="card stack">
+            <div><h3>2 &middot; Settings</h3><div class="hint">Project settings: peak 80/s, non-peak 10/s, one hour = 60 s, buffer 1,000, chunk 500, partition 500. Use faster values for a short demo.</div></div>
+            <div class="grid g3" style="gap:12px">
+              <label class="f">Peak speed (per s)<input id="s-peak" inputmode="numeric"></label>
+              <label class="f">Non-peak speed (per s)<input id="s-nonpeak" inputmode="numeric"></label>
+              <label class="f">One hour = seconds<input id="s-hour" inputmode="numeric"></label>
+            </div>
+            <div class="row"><span class="small muted">Start in</span>
+              <div class="seg" id="s-mode"><button data-v="peak">peak</button><button data-v="non-peak">non-peak</button></div>
+            </div>
+            <div class="row">
+              <button class="btn" id="applyBtn">Apply settings</button>
+              <button class="btn" data-preset="pdf">Project values</button>
+              <button class="btn" data-preset="demo">Demo (fast)</button>
+              <button class="btn" data-preset="quick">Full run in minutes</button>
+            </div>
+            <div class="small muted" id="presetNote"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between">
+            <div><h3>3 &middot; Prepare the data</h3><div class="hint">Create-DW.sql, the four cleaning rules, the MD5 sales_mode rule, the Master Data in 500-row partitions, the online file and the 48 hourly groups.</div></div>
+            <div class="row"><button class="btn primary" id="prepBtn">Prepare data</button><button class="btn" id="toLive">Go to live run &rarr;</button></div>
+          </div>
+          <div class="steps" id="steps" style="margin-top:12px"></div>
+          <div id="groupsBox" style="display:none;margin-top:6px">
+            <div class="eyebrow">The 48 periodic groups (whole carts)</div>
+            <div class="groups" id="groups"></div>
+            <div class="small muted" id="groupsNote"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== LIVE ===================== -->
+      <section class="page" id="p-live">
+        <div class="card">
+          <div class="ctl">
+            <button class="btn primary" id="startBtn">&#9654; Start threads</button>
+            <div class="grp"><span>Source</span><div class="seg" id="c-source"><button data-v="online">online</button><button data-v="periodic">periodic</button><button data-v="both">both</button></div></div>
+            <div class="grp"><span>Arrival mode</span><div class="seg" id="c-mode"><button data-v="peak">peak</button><button data-v="non-peak">non-peak</button></div></div>
+            <div class="grp"><span>Speed (transactions / s)</span>
+              <div class="speed"><input id="sp-peak" aria-label="peak speed"><button class="btn" data-speed="peak">set peak</button><input id="sp-non" aria-label="non-peak speed"><button class="btn" data-speed="non-peak">set non-peak</button></div></div>
+            <div class="spacer" style="flex:1"></div>
+            <button class="btn danger" id="quitBtn">&#9632; Quit</button>
+          </div>
+        </div>
+        <div class="done-banner" id="doneBanner"><b style="font-size:20px">&#10003;</b><span id="doneText"></span><span style="flex:1"></span><button class="btn" data-go="checks">Run the checks</button><button class="btn" data-go="analysis">Open the analysis</button></div>
+
+        <div class="board">
+          <div class="stack">
+            <div class="card feeder">
+              <div class="eyebrow" style="color:var(--online)">OnlineThread &middot; Live</div>
+              <div class="big" id="l-sent">0</div>
+              <div class="small muted">online sales sent of <span id="l-total">&mdash;</span></div>
+              <div class="bar" style="margin-top:10px"><i id="l-sentbar" style="background:var(--online);width:0"></i></div>
+              <div class="small muted" style="margin-top:8px">speed now <b id="l-tps">&mdash;</b> /s &middot; shed online <b id="l-shedon">0</b></div>
+            </div>
+            <div class="card feeder per">
+              <div class="eyebrow" style="color:var(--periodic)">PeriodicThread &middot; one group per hour</div>
+              <div class="big"><span id="l-groups">0</span><span class="muted" style="font-size:18px"> / 48 groups</span></div>
+              <div class="hours" id="hours"></div>
+              <div class="small muted" style="margin-top:8px" id="l-lastgroup">no group released yet</div>
+            </div>
+          </div>
+
+          <div class="card stack">
+            <div class="row" style="justify-content:space-between"><div><div class="eyebrow">Stream buffer</div><div class="small muted">online first, then periodic &middot; MESHJOIN takes up to 500 per iteration</div></div><div class="big" style="font-size:22px"><span id="l-buf">0</span><span class="muted" style="font-size:14px"> / 1,000</span></div></div>
+            <div class="tank"><div class="bar"><i id="b-on" style="background:var(--online);width:0"></i><i id="b-per" style="background:var(--periodic);width:0"></i></div>
+              <div class="legend"><span><i style="background:var(--online)"></i>online <b id="b-onn">0</b></span><span><i style="background:var(--periodic)"></i>periodic <b id="b-pern">0</b></span></div></div>
+            <hr style="border:0;border-top:1px dashed var(--line);margin:4px 0">
+            <div class="row" style="justify-content:space-between"><div><div class="eyebrow">MESHJOIN &middot; the room</div><div class="small muted">each iteration reads one customer page and one product page from disk</div></div>
+              <div class="small muted num">iterations <b id="m-it">0</b></div></div>
+            <div class="room">
+              <svg class="dial" id="dialC" width="150" height="150" viewBox="0 0 150 150" aria-label="customer partitions"></svg>
+              <svg class="dial" id="dialP" width="150" height="150" viewBox="0 0 150 150" aria-label="product partitions"></svg>
+              <div class="stack" style="gap:6px">
+                <div class="kpi"><span class="l">sales in H (memory)</span><span class="v num" id="m-h" style="font-size:24px">0</span></div>
+                <div class="small muted num">keys in H: customers <b id="m-kc">0</b>, products <b id="m-kp">0</b></div>
+                <div class="small muted">a chunk leaves after <b id="m-cycle">9</b> iterations = max(9, 8)</div>
+              </div>
+            </div>
+            <div><div class="eyebrow" style="margin-bottom:6px">Queue: chunks in H, oldest left (ring = iterations seen)</div><div class="conveyor" id="conveyor"><span class="empty-note">empty</span></div></div>
+          </div>
+
+          <div class="stack">
+            <div class="card disk">
+              <div class="eyebrow" style="color:var(--shed)">Shed table on disk</div>
+              <div class="big" id="s-disk">0</div>
+              <div class="small muted">waiting to be read back in non-peak</div>
+              <div class="modechips" style="margin-top:10px"><span class="chip sh">shed periodic <b id="s-per">0</b></span><span class="chip sh">shed online <b id="s-on">0</b></span><span class="chip">read back <b id="s-back">0</b></span></div>
+              <div class="small muted" style="margin-top:8px">Peak: periodic carts first, online last. Non-peak: nothing shed, free places filled from here.</div>
+            </div>
+            <div class="card loaderc">
+              <div class="eyebrow" style="color:var(--accent)">LoaderThread &rarr; DW</div>
+              <div class="big" id="d-loaded">0</div>
+              <div class="small muted">fact rows of <span id="d-exp">&mdash;</span></div>
+              <div class="bar" style="margin-top:10px"><i id="d-bar" style="background:var(--accent);width:0"></i></div>
+              <div class="small muted" style="margin-top:8px">periodic waiting for the hour <b id="d-wait">0</b></div>
+              <div class="ticks" id="d-ticks" style="margin-top:6px" title="rows loaded at each hour tick"></div>
+              <div class="modechips" id="d-modes" style="margin-top:8px"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid g2">
+          <div class="card"><h3>Throughput</h3><div class="hint">fact rows loaded per second (online every 0.5 s, periodic at each hour tick)</div><div class="chartbox" style="height:180px;margin-top:8px"><canvas id="c-thr"></canvas></div></div>
+          <div class="card"><h3>Event log</h3><div class="hint">what the program printed</div><div class="console" id="console" style="margin-top:8px"></div></div>
+        </div>
+      </section>
+
+      <!-- ===================== DW ===================== -->
+      <section class="page" id="p-dw">
+        <div class="card stack">
+          <div class="row" style="justify-content:space-between"><div><h3>Star schema</h3><div class="hint">One fact row per transaction line; five dimensions with surrogate keys; dim_time at minute level. Working tables below.</div></div><button class="btn" id="schemaRefresh">Refresh counts</button></div>
+          <img class="schema-img" src="/report/schema_diagram.png" alt="Star schema and working tables">
+        </div>
+        <div class="card"><h3>Tables in the database</h3><div class="hint">Live row counts. Click a table for its columns.</div><div class="tables" id="tables" style="margin-top:12px"></div></div>
+      </section>
+
+      <!-- ===================== ANALYSIS ===================== -->
+      <section class="page" id="p-analysis">
+        <div class="qa">
+          <div class="qlist" id="qlist"></div>
+          <div class="stack" id="qpane">
+            <div class="card stack">
+              <div class="row" style="justify-content:space-between;align-items:flex-start">
+                <div style="min-width:0;flex:1"><div class="eyebrow" id="q-num">Query</div><h3 id="q-title" style="font-size:18px;margin-top:4px">Pick a query</h3><div class="small muted" id="q-notes" style="margin-top:6px"></div></div>
+                <div class="row"><button class="btn primary" id="runQ">&#9654; Run</button></div>
+              </div>
+              <details><summary>Show SQL</summary><div class="sql" id="q-sql" style="margin-top:8px"></div></details>
+            </div>
+            <div class="card stack" id="q-result" style="display:none">
+              <div class="row" style="justify-content:space-between"><div class="timing"><b id="q-rows"></b><span class="muted small" id="q-time"></span></div>
+                <div class="seg" id="q-view"><button data-v="table" class="on">table</button><button data-v="chart">chart</button></div></div>
+              <div class="tablewrap" id="q-table"></div>
+              <div class="chartbox" id="q-chartbox" style="display:none"><canvas id="c-q"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== CHECKS ===================== -->
+      <section class="page" id="p-checks">
+        <div class="card stack">
+          <div class="row" style="justify-content:space-between"><div><h3>Is the DW right?</h3><div class="hint">Expected values are computed from the working data (the online file and the staging table), not from the DW.</div></div><button class="btn primary" id="checkBtn">Run the checks</button></div>
+          <div id="checks"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- ===== presenter ===== -->
+<aside class="presenter" id="presenter" aria-label="Presenter notes">
+  <header><span class="eyebrow">Presenter</span><h3 id="pr-count"></h3><button class="btn" id="prClose" aria-label="Close presenter">&times;</button></header>
+  <div class="pnav" id="pnav"></div>
+  <div class="pbody" id="pbody"></div>
+  <div class="pfoot"><button class="btn" id="prPrev">&larr; Back</button><span class="small muted" style="align-self:center"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> keys</span><button class="btn primary" id="prNext">Next &rarr;</button></div>
+</aside>
+<div class="toast" id="toast"></div>
+
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
