@@ -144,21 +144,27 @@ def send_to_output(finished, output):
 import threading
 import time
 
+from stream import to_transaction
+
 
 class MeshJoinThread(threading.Thread):
     """Runs MESHJOIN iterations in a loop: take a chunk (up to 500) from the
     stream buffer, iterate, send finished transactions to the output queue.
+    Load shedding module (step 8.3): in non-peak time, a chunk with free places
+    is filled from the shed table, so the priority is online, periodic, shed.
     Keeps running until the quit command (PDF 9.5)."""
 
-    def __init__(self, db_params, buffer, output, stop_event, feeders):
+    def __init__(self, db_params, buffer, output, stop_event, feeders, settings):
         super().__init__(name="MeshJoinThread", daemon=True)
         self.db_params = db_params
         self.buffer = buffer
         self.output = output
         self.stop_event = stop_event
         self.feeders = feeders            # [OnlineThread, PeriodicThread]
+        self.settings = settings          # mode: peak / non-peak
         self.mj = None
         self.processed = 0
+        self.read_back = 0                # transactions taken back from shed_table
         self.finished = False
 
     def feeders_done(self):
@@ -173,7 +179,14 @@ class MeshJoinThread(threading.Thread):
         conn = db.connect(*self.db_params)   # own MySQL connection for this thread
         self.mj = MeshJoin(conn)
         while not self.stop_event.is_set():
-            chunk = self.buffer.take_chunk(500)
+            chunk = self.buffer.take_chunk(500)           # online first, then periodic
+
+            # step 8.3: in non-peak time, fill the free places from the shed table
+            if self.settings.mode == "non-peak" and len(chunk) < 500:
+                back = db.read_shed(conn, 500 - len(chunk))
+                chunk += [to_transaction(r, "Shed") for r in back]
+                self.read_back += len(back)
+
             if chunk or self.mj.queue:
                 self.processed += send_to_output(self.mj.iterate(chunk), self.output)
                 if not chunk:

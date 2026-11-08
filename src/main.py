@@ -173,6 +173,7 @@ def print_status(s, buffer, mesh, online, periodic, loader, conn):
     print(f"Shed in peak: online {online.shed_online:,}, "
           f"periodic {online.shed_periodic + periodic.shed:,} "
           f"(arriving {periodic.shed:,}, taken out of the buffer {online.shed_periodic:,})")
+    print(f"Read back from shed (non-peak): {mesh.read_back:,}")
     print(f"Online sent: {online.sent:,}   Periodic groups released: {len(periodic.log)} / 48")
     print(f"Out of MESHJOIN: {loader.received:,}   by processing mode: {dict(loader.by_processing_mode)}")
 
@@ -187,7 +188,7 @@ def run_threads(cfg, db_params, online_file, expected):
 
     online = stream.OnlineThread(online_file, buffer, settings, stop, db_params)
     periodic = stream.PeriodicThread(db_params, buffer, settings, stop)
-    mesh = meshjoin.MeshJoinThread(db_params, buffer, output, stop, [online, periodic])
+    mesh = meshjoin.MeshJoinThread(db_params, buffer, output, stop, [online, periodic], settings)
     loader = LoaderThread(output, stop)
     for t in (online, periodic, mesh, loader):
         t.start()
@@ -247,6 +248,7 @@ def run_threads(cfg, db_params, online_file, expected):
     print(f"Not fully enriched: {loader.unmatched}")
     print("Rows per store:", dict(sorted(loader.stores.items())))
     print(f"Shed in peak: online {online.shed_online:,}, periodic {online.shed_periodic + periodic.shed:,}")
+    print(f"Read back from shed (non-peak): {mesh.read_back:,}")
 
 
 if __name__ == "__main__":

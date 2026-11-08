@@ -9,6 +9,7 @@ BATCH_SIZE = 5000
 
 def connect(host, port, database, user, password):
     conn = mysql.connector.connect(host=host, port=port, user=user, password=password)
+    conn.autocommit = True     # every read sees the latest data written by the other threads
     cur = conn.cursor()
     cur.execute(f"CREATE DATABASE IF NOT EXISTS `{database}`")
     cur.execute(f"USE `{database}`")
@@ -109,3 +110,28 @@ def shed_rows(conn, transactions):
                     f"VALUES ({', '.join(['%s'] * (len(SHED_COLUMNS) + 1))})", rows)
     conn.commit()
     cur.close()
+
+
+def read_shed(conn, max_rows):
+    """Non-peak (step 8.3): take up to max_rows back from shed_table and delete
+    them there. Online-flagged rows first ('Online' sorts before 'Periodic'),
+    oldest first. A periodic cart is not cut: if the last cart does not fit,
+    it stays on disk for the next time (unless it is the only cart)."""
+    cur = conn.cursor(dictionary=True)
+    cur.execute("SELECT shed_id, transaction_id, customer_id, product_id, quantity, "
+                "unit_price, event_time, sales_mode FROM shed_table "
+                "ORDER BY sales_mode, shed_id LIMIT %s", (max_rows + 1,))
+    rows = cur.fetchall()
+    if len(rows) > max_rows:
+        next_row = rows.pop()                      # first row that did not fit
+        last = rows[-1]
+        if next_row["sales_mode"] == "Periodic" and next_row["transaction_id"] == last["transaction_id"]:
+            whole = [r for r in rows if r["transaction_id"] != last["transaction_id"]]
+            if whole:                              # leave the cut cart for next time
+                rows = whole
+    if rows:
+        ids = [r["shed_id"] for r in rows]
+        cur.execute(f"DELETE FROM shed_table WHERE shed_id IN ({', '.join(['%s'] * len(ids))})", ids)
+        conn.commit()
+    cur.close()
+    return rows
