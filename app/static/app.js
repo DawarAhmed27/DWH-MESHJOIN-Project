@@ -110,6 +110,42 @@ function drawMetro() {
     ${st(1020, 115, "Star schema", "5 dimensions + fact", "dw", "below")}
     ${st(1140, 115, "Q1–Q20", "OLAP, view, MV", "analysis", "above")}`;
   $$("#metro .st").forEach(g => g.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(g.dataset.go); } }));
+  metroTips(svg);
+}
+/* hover notes on each station: what was done in that phase */
+const METRO_TIPS = {
+  "Online Retail.xlsx": ["Source data", "UCI Online Retail file, read with pandas. IDs read as text so codes like 85123A keep their letters. Dates 1 Dec 2010 to 9 Dec 2011."],
+  "Cleaning": ["Phase: cleaning", "Only the 4 PDF rules: CustomerID present, no C (cancelled) invoice, quantity > 0, price > 0. Removed 135,080 + 8,905 + 0 + 40 rows. 18,532 carts left."],
+  "sales_mode": ["Phase: splitting", "n = first 8 hex digits of MD5(InvoiceNo). n mod 10 = 0-6 Online, 7-9 Periodic. Hashed per cart, so a cart is never split. Store: online = 1, periodic = 2 + n mod 4."],
+  "Online stream": ["Phase: OnlineThread", "online_sales_stream.csv sent row by row in time order at the chosen speed (80/s peak, 10/s non-peak). Online sales go into the buffer first."],
+  "48 hourly groups": ["Phase: PeriodicThread", "Store carts cut into 48 groups of whole carts (2,263-2,710 rows). One group released per hour from periodic_sales_data; released = 1 so it is never sent twice."],
+  "Stream buffer": ["Stream buffer", "Holds up to 1,000 sales. Online line taken first, then whole periodic carts. Threads wait on a Condition when it is full; in peak, sales that don't fit are shed."],
+  "MESHJOIN": ["Phase: MESHJOIN", "Each iteration: take a chunk of 500 into H, read one customer page and one product page from disk, fill the matching sales. A chunk leaves after max(9, 8) = 9 iterations."],
+  "Loader": ["Phase: loading", "revenue = unit price x quantity (Decimal). New dimension rows inserted first, then facts, one commit per batch. Online loaded every 0.5 s, periodic at each hour tick."],
+  "Star schema": ["Phase: DW design", "fact_sales at transaction-line grain + 5 dimensions (customer, product, supplier, store, time per minute). Surrogate keys, foreign keys, CHECKs. 397,884 rows."],
+  "Q1–Q20": ["Phase: OLAP queries", "20 queries on the loaded year 2011: ranking (ROW_NUMBER, RANK), growth (LAG), pivots (SUM CASE), ROLLUP, CTEs, a view and a materialized table."],
+};
+function metroTips(svg) {
+  let tip = document.querySelector(".metro-tip");
+  if (!tip) { tip = document.createElement("div"); tip.className = "metro-tip"; tip.setAttribute("role", "tooltip"); document.body.appendChild(tip); }
+  const show = g => {
+    const d = METRO_TIPS[g.querySelector("text").textContent]; if (!d) return;
+    tip.innerHTML = `<b>${d[0]}</b>${d[1]}`;
+    tip.classList.add("on");
+    const c = g.querySelector(".o").getBoundingClientRect();
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    let left = c.left + c.width / 2 - tw / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - tw - 8));
+    let top = c.top - th - 10;
+    if (top < 8) top = c.bottom + 10;
+    tip.style.left = left + "px"; tip.style.top = top + "px";
+  };
+  const hide = () => tip.classList.remove("on");
+  $$("#metro .st").forEach(g => {
+    g.addEventListener("mouseenter", () => show(g)); g.addEventListener("mouseleave", hide);
+    g.addEventListener("focus", () => show(g)); g.addEventListener("blur", hide);
+  });
+  $("#view").addEventListener("scroll", hide, { passive: true });
 }
 
 async function loadOverview() {

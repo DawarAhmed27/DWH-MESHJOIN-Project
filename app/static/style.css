@@ -160,7 +160,10 @@ svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none;
 /* ================= overview ================= */
 .intro h1 { font-size: 24px; letter-spacing: -.01em; }
 .intro p { color: var(--ink-2); margin-top: var(--s2); max-width: 78ch; }
-.metro-wrap { padding: var(--s4) var(--s5) var(--s2); }
+.metro-wrap { padding: var(--s4) var(--s5) var(--s2); position: relative; }
+.metro-tip { position: fixed; z-index: 50; width: 280px; max-width: calc(100% - 16px); padding: 9px 12px; background: #fff; border: 1px solid var(--hair-2); border-radius: 6px; box-shadow: 0 4px 14px rgba(26,33,41,.12); font-size: 12.5px; line-height: 1.5; color: var(--ink-2); pointer-events: none; opacity: 0; transition: opacity .12s; }
+.metro-tip.on { opacity: 1; }
+.metro-tip b { display: block; color: var(--ink); font-size: 12px; margin-bottom: 2px; }
 .metro { width: 100%; height: auto; display: block; }
 .metro .st { cursor: pointer; }
 .metro .st:hover .o { stroke-width: 5; }
