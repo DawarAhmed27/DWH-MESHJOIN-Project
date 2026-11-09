@@ -49,8 +49,8 @@ p { margin: 0; }
 svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ================= shell ================= */
-.shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); height: 100%; }
-.rail { background: var(--rail); color: #C3CDD5; display: flex; flex-direction: column; padding: var(--s5) 0 var(--s4); }
+.shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); grid-template-rows: 100vh; height: 100vh; }
+.rail { background: var(--rail); color: #C3CDD5; display: flex; flex-direction: column; padding: var(--s5) 0 var(--s4); min-height: 0; overflow-y: auto; }
 .brand { padding: 0 var(--s5) var(--s6); display: flex; gap: 10px; align-items: center; }
 .brand b { color: #fff; font-size: var(--t-md); font-weight: 600; letter-spacing: .01em; line-height: 1.25; }
 .brand span { display: block; color: #7D8C99; font-size: var(--t-xs); font-weight: 400; }
@@ -66,7 +66,7 @@ svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none;
 .rail-foot .btn { background: transparent; border-color: #34434F; color: #E3E9EE; justify-content: center; }
 .rail-foot .btn:hover { background: #1B2731; border-color: #4A5C6B; }
 
-.main { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+.main { display: flex; flex-direction: column; min-width: 0; min-height: 0; height: 100vh; }
 .top { height: 64px; flex: none; display: flex; align-items: center; gap: var(--s5); padding: 0 var(--s6); border-bottom: 1px solid var(--hair); background: var(--panel); }
 .top h2 { font-size: var(--t-xl); }
 .top .sub { color: var(--ink-3); font-size: var(--t-sm); }
@@ -82,7 +82,7 @@ svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none;
 .status b { color: var(--ink); font-weight: 500; }
 @keyframes blink { 50% { opacity: .3; } }
 
-.view { flex: 1; overflow-y: auto; container-type: inline-size; container-name: view; }
+.view { flex: 1; min-height: 0; overflow-y: auto; container-type: inline-size; container-name: view; }
 .page { display: none; flex-direction: column; gap: var(--s6); padding: var(--s6) var(--s6) var(--s7); max-width: 1360px; }
 .page.on { display: flex; }
 
