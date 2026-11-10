@@ -881,6 +881,179 @@
   };
 
   window.SpeedSim = SpeedSim;
+
+  /* =====================================================================
+     LOADING THE DW: LoaderThread + consolidate() (src/loader.py, consolidation.py)
+     ===================================================================== */
+  const LoadSim = {
+    mount(root) {
+      // real rows from the cleaned data and the Master Data
+      const SALES = [
+        { L: "A", tid: "536365", pid: "85123A", pname: "WHITE HANGING HEART T-LIGHT HOLDER", cat: "Garden", sup: "SUP01", supn: "Northwind Supplies", cid: "17850", g: "Female", age: "51-55", qty: 6, price: "2.55", rev: "15.30", flt: "15.299999999999999", t: "2010-12-01 08:26", mode: "Online", proc: "Live", store: 1 },
+        { L: "B", tid: "536365", pid: "71053", pname: "WHITE MOROCCAN METAL LANTERN", cat: "Garden", sup: "SUP05", supn: "EuroPack Partners", cid: "17850", g: "Female", age: "51-55", qty: 6, price: "3.39", rev: "20.34", flt: "20.34", t: "2010-12-01 08:26", mode: "Online", proc: "Live", store: 1 },
+        { L: "C", tid: "536366", pid: "22633", pname: "HAND WARMER UNION JACK", cat: "Kitchen", sup: "SUP03", supn: "Midlands Wholesale", cid: "17850", g: "Female", age: "51-55", qty: 6, price: "1.85", rev: "11.10", flt: "11.100000000000001", t: "2010-12-01 08:28", mode: "Online", proc: "Live", store: 1 },
+        { L: "D", tid: "536370", pid: "22728", pname: "ALARM CLOCK BAKELIKE PINK", cat: "Home Decor", sup: "SUP01", supn: "Northwind Supplies", cid: "12583", g: "Female", age: "36-45", qty: 24, price: "3.75", rev: "90.00", flt: "90.0", t: "2010-12-01 08:45", mode: "Periodic", proc: "Periodic", store: 3 },
+        { L: "E", tid: "536370", pid: "22727", pname: "ALARM CLOCK BAKELIKE RED", cat: "Party", sup: "SUP02", supn: "Atlantic Gifts Ltd", cid: "12583", g: "Female", age: "36-45", qty: 24, price: "3.75", rev: "90.00", flt: "90.0", t: "2010-12-01 08:45", mode: "Periodic", proc: "Periodic", store: 3 },
+      ];
+      const STORE = { 1: ["Online", "Web"], 3: ["Manchester Arndale", "Manchester"] };
+      const DIMS = [["customer", "dim_customer", s => s.cid], ["product", "dim_product", s => s.pid], ["supplier", "dim_supplier", s => s.sup],
+                    ["store", "dim_store", s => String(s.store)], ["time", "dim_time", s => s.t.replace(/\D/g, "")]];
+      const EVENTS = [{ k: "ready" }, { k: "read" }, { k: "row", i: 0 }, { k: "row", i: 1 }, { k: "row", i: 2 }, { k: "facts" }, { k: "commit" },
+                      { k: "hour" }, { k: "row", i: 3 }, { k: "row", i: 4 }, { k: "facts" }, { k: "commit" }, { k: "done" }];
+      const CODE = [
+        ["# LoaderThread.run()", "c"],
+        ["t = self.output.get(timeout=0.1)", "read"],
+        ["if t[\"sales_mode\"] == \"Online\": batch.append(t)        # loaded at once", "read"],
+        ["else: self.waiting.append(t)                           # periodic waits for the hour", "read"],
+        ["if batch and (len(batch) >= 1000 or 0.5 s passed): self.load(conn, batch)", "flush"],
+        ["if time.time() >= next_hour: self.load_waiting(conn)   # same load(), all periodic", "hour"],
+        ["", ""],
+        ["def load(self, conn, transactions):", "row facts commit"],
+        ["    for t in transactions:", "row"],
+        ["        dims, fact = consolidate(t)       # revenue, 5 dimension rows, fact row", "row"],
+        ["        for name, row in dims.items():    # 1. dimensions first", "row"],
+        ["            fact[key_col] = self.dimension_key(cur, name, row)", "row"],
+        ["    cur.executemany(\"INSERT INTO fact_sales ...\", facts)   # 2. then the facts", "facts"],
+        ["    conn.commit()                         # 3. dimensions + facts in one commit", "commit"],
+        ["", ""],
+        ["def dimension_key(self, cur, name, row):", "row"],
+        ["    known = self.keys[name]               # id -> surrogate key, in memory", "row"],
+        ["    if row[id_col] not in known:          # a new value", "miss"],
+        ["        cur.execute(\"INSERT INTO dim_...\")  # insert the dimension row", "miss"],
+        ["        known[value] = cur.lastrowid      # its new AUTO_INCREMENT key", "miss"],
+        ["    return known[value]                   # known value: no SQL at all", "hit"],
+      ];
+      root.classList.add("sx");
+      root.innerHTML = `
+        <div class="sx-bar">
+          <button class="sx-btn" data-a="prev">Back</button>
+          <button class="sx-btn primary" data-a="next">Next</button>
+          <button class="sx-btn" data-a="reset">Start again</button>
+          <div class="lk-dots" data-r="dots"></div>
+          <span class="sx-meta">Step <b data-r="n">1</b> of ${EVENTS.length}</span>
+        </div>
+        <div class="ld-flow">
+          <div class="sx-box" data-r="b-q"><h4>Output queue</h4><div class="sx-sub">joined sales from MESHJOIN, with their store</div><div class="ld-chips" data-r="q"></div></div>
+          <div class="ld-ar">&rarr;</div>
+          <div class="sx-box" data-r="b-batch"><h4>batch</h4><div class="sx-sub">Online: loaded every 0.5 s (or 1,000 rows)</div><div class="ld-chips" data-r="batch"></div></div>
+          <div class="sx-box" data-r="b-wait"><h4>waiting</h4><div class="sx-sub">Periodic: loaded together at the hour tick</div><div class="ld-chips" data-r="wait"></div></div>
+        </div>
+        <div class="ld-mid">
+          <div class="sx-box" data-r="b-now"><h4>Now loading</h4><div data-r="now"></div></div>
+          <div class="sx-box" data-r="b-keys"><h4>Key maps <span class="sx-faint">(in the loader's memory)</span></h4><div class="sx-sub">id &rarr; surrogate key of values already in the DW</div><div class="ld-maps" data-r="maps"></div></div>
+        </div>
+        <div class="sx-box" data-r="b-dw">
+          <div class="th-head"><h4>The DW in MySQL</h4><span class="ld-tx" data-r="tx"></span></div>
+          <div class="ld-dims" data-r="dims"></div>
+          <div class="ld-fact"><table><thead><tr><th>sale_key</th><th>transaction_id</th><th>customer_key</th><th>product_key</th><th>supplier_key</th><th>store_key</th><th>time_key</th><th>quantity</th><th>revenue</th><th>sales_mode</th><th>processing_mode</th></tr></thead><tbody data-r="facts"></tbody></table></div>
+        </div>
+        <div class="lk-say"><h4 data-r="t"></h4><p data-r="x"></p></div>
+        <pre class="sx-code" data-r="code"></pre>
+        <p class="sx-foot">Five real sales from the first minutes of the data, loaded into an empty DW, so the surrogate keys start at 1. Real batches hold up to 1,000 sales.</p>`;
+      const r = n => root.querySelector(`[data-r="${n}"]`);
+      let i = 0;
+      function build(upto) {
+        const S = { queue: SALES.map(x => x.L), batch: [], wait: [], maps: {}, next: {}, dimRows: {}, facts: [], cur: null, pendingFacts: [], hourly: false, tags: [], hl: [], t: "", x: "" };
+        DIMS.forEach(([n]) => { S.maps[n] = []; S.next[n] = 1; S.dimRows[n] = []; });
+        let loading = [];
+        for (let e = 0; e <= upto; e++) {
+          const ev = EVENTS[e]; S.cur = null; S.tags = []; S.hl = [];
+          if (ev.k === "ready") {
+            S.t = "Five joined sales are waiting"; S.hl = ["b-q"];
+            S.x = "MESHJOIN has finished these sales: each has its customer and product attributes and its store. The DW is empty. The LoaderThread has its own MySQL connection with <code>autocommit = False</code>, so nothing it writes is visible until it commits.";
+          }
+          if (ev.k === "read") {
+            S.queue = []; S.batch = SALES.filter(x => x.mode === "Online").map(x => x.L); S.wait = SALES.filter(x => x.mode !== "Online").map(x => x.L);
+            S.tags = ["read"]; S.hl = ["b-q", "b-batch", "b-wait"];
+            S.t = "Sort them by sales_mode";
+            S.x = "<b>Online</b> sales (A, B, C) go into the batch and are loaded within 0.5 s: near real time. <b>Periodic</b> sales (D, E, from store 3) wait in a list until the hour tick, because the PDF says periodic data is loaded periodically. Shed sales follow their flag in the same way.";
+          }
+          if (ev.k === "row") {
+            const sale = SALES[ev.i];
+            if (!loading.length || (ev.i === 0 || ev.i === 3)) loading = [];
+            if (sale.mode === "Online") S.batch = S.batch.filter(l => l !== sale.L); else S.wait = S.wait.filter(l => l !== sale.L);
+            const look = DIMS.map(([n, tbl, f]) => {
+              const id = f(sale); const m = S.maps[n].find(x => x[0] === id);
+              if (m) return { n, tbl, id, hit: true, key: m[1] };
+              const key = n === "time" ? id : S.next[n]++;
+              S.maps[n].push([id, key]);
+              S.dimRows[n].push({ key, id, pending: true, extra: n === "customer" ? sale.g + ", " + sale.age : n === "product" ? sale.pname : n === "supplier" ? sale.supn : n === "store" ? STORE[sale.store][0] : sale.t.slice(11) });
+              return { n, tbl, id, hit: false, key };
+            });
+            const k = Object.fromEntries(look.map(l => [l.n, l.key]));
+            loading.push(sale.L);
+            S.pendingFacts.push({ tid: sale.tid, k, qty: sale.qty, rev: sale.rev, mode: sale.mode, proc: sale.proc, L: sale.L });
+            S.cur = { sale, look };
+            const misses = look.filter(l => !l.hit).length;
+            S.tags = ["row", misses ? "miss" : "", misses < 5 ? "hit" : ""]; S.hl = ["b-now", "b-keys", "b-dw"];
+            S.t = `Sale ${sale.L}: consolidate, then ${misses === 5 ? "5 new dimension rows" : misses ? misses + " new, " + (5 - misses) + " known" : "all 5 dimensions known"}`;
+            S.x = `<code>consolidate()</code> computes revenue = ${sale.qty} &times; ${sale.price} = <b>${sale.rev}</b> as a Decimal, builds the 5 dimension rows and the fact row. Then for each dimension the key map is checked: ` +
+              (misses ? `${misses === 5 ? "every value is new, so each one is <b>inserted first</b> and its new key is taken from <code>lastrowid</code>" : "new values are <b>inserted first</b>; known ones reuse their key with <b>no SQL at all</b>"}` : "every value is already in the DW, so <b>no dimension SQL</b> runs; only the keys are copied") +
+              `. The fact row now has all five keys.` + (ev.i === 3 ? ` Note store <b>3</b> gets surrogate key <b>2</b>: the key is the DW's own number, not the source id.` : "");
+          }
+          if (ev.k === "facts") {
+            S.facts.push(...S.pendingFacts.map(f => ({ ...f, key: S.facts.length + S.pendingFacts.indexOf(f) + 1, pending: true }))); S.pendingFacts = [];
+            S.tags = ["facts"]; S.hl = ["b-dw"];
+            S.t = "Insert the facts in one go";
+            S.x = "All fact rows of the batch go in with one <code>executemany</code>. The dimension rows they point to are already there, so every foreign key is satisfied. But nothing is committed yet: other connections still see an empty DW.";
+          }
+          if (ev.k === "commit") {
+            DIMS.forEach(([n]) => S.dimRows[n].forEach(d => d.pending = false)); S.facts.forEach(f => f.pending = false);
+            S.tags = ["commit"]; S.hl = ["b-dw"];
+            S.t = "Commit: dimensions and facts together";
+            S.x = "One commit per batch. The dimension rows and the facts appear in the DW <b>at the same moment</b>, so nobody can ever see a fact without its dimension row, and a failure in the middle leaves nothing half-written.";
+          }
+          if (ev.k === "hour") {
+            S.tags = ["hour"]; S.hl = ["b-wait"]; S.hourly = true;
+            S.t = "Hour tick: load the waiting periodic sales";
+            S.x = "When the hour comes, <code>load_waiting()</code> loads every waiting periodic sale with the same <code>load()</code>, in batches of 1,000. A group extracted at hour k is joined during hour k and loaded at the next tick.";
+          }
+          if (ev.k === "done") {
+            S.t = "Done: 5 facts, every dimension value once";
+            S.x = `The DW now has 5 fact rows. Customer 17850 bought 3 times but is stored <b>once</b>; SUP01 supplies two products but is stored once; 08:26 is one dim_time row for two sales. The loader counts what it loaded by processing_mode (Live, Periodic, Shed) and how many sales were not fully enriched (0).`;
+          }
+        }
+        return S;
+      }
+      const chips = ls => ls.length ? ls.map(L => { const s = SALES.find(x => x.L === L); return `<span class="ld-chip ${s.mode === "Online" ? "o" : "p"}" title="${s.tid} · ${s.pid}"><b>${L}</b>${s.tid} · ${s.pid}</span>`; }).join("") : `<span class="th-empty">empty</span>`;
+      function render() {
+        const S = build(i);
+        r("n").textContent = i + 1;
+        r("dots").innerHTML = EVENTS.map((_, k) => `<i class="${k === i ? "on" : k < i ? "past" : ""}"></i>`).join("");
+        r("q").innerHTML = chips(S.queue); r("batch").innerHTML = chips(S.batch); r("wait").innerHTML = chips(S.wait);
+        ["b-q", "b-batch", "b-wait", "b-now", "b-keys", "b-dw"].forEach(n => r(n).classList.toggle("hl", S.hl.includes(n)));
+        if (S.cur) {
+          const s = S.cur.sale;
+          r("now").innerHTML = `<div class="ld-sale"><span class="ld-chip ${s.mode === "Online" ? "o" : "p"}"><b>${s.L}</b>${s.tid}</span> customer <b>${s.cid}</b> &middot; product <b>${s.pid}</b> &middot; store <b>${s.store}</b> &middot; ${s.t}</div>
+            <div class="ld-rev"><span>revenue = ${s.qty} &times; ${s.price}</span><b>Decimal: ${s.rev}</b><span class="sx-faint">float would give ${s.flt}</span></div>
+            <table class="ld-look"><thead><tr><th>dimension</th><th>value</th><th>in the key map?</th><th>key</th></tr></thead><tbody>${S.cur.look.map(l =>
+              `<tr><td>${l.tbl}</td><td class="m">${l.id}</td><td>${l.hit ? `<span class="ld-hit">known: reuse</span>` : `<span class="ld-miss">new: INSERT first</span>`}</td><td class="m"><b>${l.key}</b></td></tr>`).join("")}</tbody></table>`;
+        } else r("now").innerHTML = `<div class="th-empty" style="padding:8px 0">${i === 0 ? "Waiting for the first batch." : i >= EVENTS.length - 1 ? "Nothing left to load." : "Between sales."}</div>`;
+        r("maps").innerHTML = DIMS.map(([n]) => `<div class="ld-map"><div class="hd">${n}</div>${S.maps[n].length ? S.maps[n].map(([id, k]) => n === "time" ? `<div><b>${k}</b></div>` : `<div><span>${id}</span><b>${k}</b></div>`).join("") : `<div class="th-empty">empty</div>`}</div>`).join("");
+        r("dims").innerHTML = DIMS.map(([n, tbl]) => `<div class="ld-dim"><div class="hd">${tbl} <span>${S.dimRows[n].length}</span></div>${S.dimRows[n].map(d => n === "time" ? `<div class="tk ${d.pending ? "pend" : ""}"><b>${d.key}</b><em>${d.extra}</em></div>` : `<div class="${d.pending ? "pend" : ""}"><b>${d.key}</b><span>${d.id}</span><em>${d.extra}</em></div>`).join("") || `<div class="th-empty">empty</div>`}</div>`).join("");
+        const facts = S.facts.concat(S.pendingFacts.map(f => ({ ...f, key: "", building: true })));
+        r("facts").innerHTML = facts.length ? facts.map(f => `<tr class="${f.building ? "bld" : f.pending ? "pend" : ""}"><td>${f.key || "&ndash;"}</td><td>${f.tid}</td><td>${f.k.customer}</td><td>${f.k.product}</td><td>${f.k.supplier}</td><td>${f.k.store}</td><td>${f.k.time}</td><td>${f.qty}</td><td>${f.rev}</td><td>${f.mode}</td><td>${f.proc}</td></tr>`).join("")
+          : `<tr><td colspan="11" class="th-empty">no fact rows yet</td></tr>`;
+        const pend = DIMS.some(([n]) => S.dimRows[n].some(d => d.pending)) || S.facts.some(f => f.pending);
+        r("tx").textContent = pend ? "not committed yet: only the loader sees these rows" : "everything committed";
+        r("tx").classList.toggle("pend", pend);
+        r("t").textContent = S.t; r("x").innerHTML = S.x;
+        r("code").innerHTML = codeHTML(CODE, S.tags.filter(Boolean));
+        root.querySelector("[data-a=prev]").disabled = i === 0;
+        root.querySelector("[data-a=next]").disabled = i === EVENTS.length - 1;
+      }
+      const next = () => { if (i < EVENTS.length - 1) { i++; render(); } };
+      const prev = () => { if (i > 0) { i--; render(); } };
+      const reset = () => { i = 0; render(); };
+      root.querySelector("[data-a=next]").onclick = next;
+      root.querySelector("[data-a=prev]").onclick = prev;
+      root.querySelector("[data-a=reset]").onclick = reset;
+      render();
+      return { next, prev, reset, stop: () => {} };
+    }
+  };
+
+  window.LoadSim = LoadSim;
   window.MeshSim = MeshSim;
   window.ThreadSim = ThreadSim;
 })();

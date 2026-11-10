@@ -82,6 +82,8 @@ function showSim(tab) {
   if (!SIM.meshjoin && window.MeshSim) SIM.meshjoin = MeshSim.mount($("#sim-meshjoin"));
   if (!SIM.lock && window.LockSim) SIM.lock = LockSim.mount($("#sim-lock"));
   if (!SIM.speed && window.SpeedSim) SIM.speed = SpeedSim.mount($("#sim-speed"));
+  if (!SIM.load && window.LoadSim) SIM.load = LoadSim.mount($("#sim-load"));
+  $("#sim-load").hidden = tab !== "load";
   $("#sim-speed").hidden = tab !== "speed";
   $("#sim-threads").hidden = tab !== "threads";
   $("#sim-lock").hidden = tab !== "lock";
@@ -614,6 +616,12 @@ const STEPS = [
   { title: "Non-peak: shed sales come back", page: "live", action: ["Switch to non-peak", () => api("/api/command", { cmd: "both" }).then(() => api("/api/command", { cmd: "non-peak" })).then(poll)],
     show: ["The shed table goes down to 0; read back goes up.", "Those sales reach the DW with processing_mode = Shed."],
     say: ["In non-peak nothing is shed. Any chunk with free places is filled from the shed table, online-flagged first. Priority is online, periodic, shed."] },
+  { title: "Loading the DW, step by step", page: "explain", tab: "load",
+    actions: [["Next", () => SIM.load.next()], ["Back", () => SIM.load.prev()], ["Start again", () => SIM.load.reset()]],
+    show: ["Online sales go into the batch; periodic sales wait for the hour.", "Sale A: all five dimension values are new, so they are inserted first; keys come from lastrowid.", "Sales B and C reuse known keys with no SQL; then executemany and one commit.", "Hour tick: the periodic sales; store 3 gets surrogate key 2."],
+    say: ["consolidate() computes revenue = quantity x unit price as a Decimal and cuts the sale into five dimension rows and one fact row.",
+          "Dimensions first: the key map says which values are already in the DW. New ones are inserted and their AUTO_INCREMENT key is kept; known ones cost no SQL.",
+          "All facts of the batch go in with executemany, then one commit, so a fact never exists without its dimension rows."] },
   { title: "Loading the DW", page: "live",
     show: ["Loaded rises every 0.5 s (online).", "Periodic waits and is loaded at each hour tick (the small bars)."],
     say: ["The loader computes revenue = quantity × price, inserts any new dimension row first, then the facts, one commit per batch. Without the bonus, Live results go straight into the fact table."] },
