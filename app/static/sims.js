@@ -290,6 +290,7 @@
         <div class="sx-bar">
           <button class="sx-btn primary" data-a="step">Next step</button>
           <button class="sx-btn" data-a="tick">Next tick</button>
+          <button class="sx-btn" data-a="shedwalk">Show the shed path</button>
           <button class="sx-btn" data-a="play">Play</button>
           <button class="sx-btn" data-a="reset">Reset</button>
           <span class="sx-meta">Tick <b data-r="tick">0</b> &middot; simulated hour <b data-r="hour">0</b> &middot; next group <b data-r="grp">0</b> at tick <b data-r="nrel">0</b></span>
@@ -340,6 +341,7 @@
               <div class="sx-sub">takes up to ${CHUNK} &middot; sales leave after ${CYCLE} iterations</div>
               <div class="th-mem" data-r="mem"></div>
               <div class="sx-kv"><span>last chunk</span><b data-r="m-last">&ndash;</b></div>
+              <div class="th-chunk" data-r="chunkbar" aria-label="places in the last chunk"></div>
               <div class="sx-kv"><span>read back from shed</span><b data-r="m-back">0</b></div>
             </div>
             <div class="sx-box" data-r="c-loader">
@@ -348,6 +350,7 @@
               <div class="sx-kv"><span>loaded online</span><b data-r="l-on">0</b></div>
               <div class="sx-kv"><span>periodic waiting for the hour</span><b data-r="l-wait">0</b></div>
               <div class="sx-kv"><span>loaded periodic</span><b data-r="l-per">0</b></div>
+              <div class="sx-kv"><span>of these, processing_mode Shed</span><b data-r="l-shed">0</b></div>
             </div>
           </div>
         </div>
@@ -355,12 +358,14 @@
           <div class="th-head"><h4>shed_table (disk)</h4><span class="sx-faint" data-r="shedcount"></span></div>
           <div class="th-lane"><div class="th-ll">flag Online</div><div class="th-items" data-r="so"></div></div>
           <div class="th-lane"><div class="th-ll">flag Periodic</div><div class="th-items" data-r="sp"></div></div>
+          <div class="th-path" data-r="path"></div>
         </div>
         <div class="sx-legend">
           <span><i style="background:var(--online)"></i>online sale</span>
           <span><i style="background:var(--periodic)"></i>periodic sale (letter = its cart)</span>
           <span><i style="background:var(--panel);box-shadow:inset 0 0 0 2px var(--shed)"></i>just shed</span>
           <span><i style="background:var(--panel);box-shadow:inset 0 0 0 2px var(--accent)"></i>just added</span>
+          <span><i class="th-legshed"></i>place filled from shed_table</span>
         </div>
         <div class="sx-say">
           <div class="sx-narr" data-r="narr" aria-live="polite"></div>
@@ -373,14 +378,14 @@
       const reset = () => {
         S = { tick: 0, turn: 0, set: { mode: "peak", source: "both", peak: 3, nonpeak: 1 },
               on: [], per: [], nextO: 1, held: null, k: 0, nextRel: 0, heldDue: false, pending: [],
-              shed: [], shedId: 1, mem: [], output: [], wait: [], loadedOn: 0, loadedPer: 0,
+              shed: [], shedId: 1, mem: [], output: [], wait: [], loadedOn: 0, loadedPer: 0, loadedShed: 0, hit: 0, guide: null,
               sentO: 0, sentP: 0, shedO: 0, shedP: 0, back: 0, lastChunk: null, fresh: new Set(), freshShed: new Set(),
               st: { main: "reading commands", online: "not started", periodic: "not started", mesh: "not started", loader: "not started" },
               acting: null, lockBy: null, tags: null, narr: null, released: new Set() };
         render();
       };
       const room = () => LIMIT - S.on.length - S.per.length;
-      const shedRows = (rows, flag) => rows.forEach(x => { const s = { ...x, flag, at: S.tick, sid: S.shedId++ }; S.shed.push(s); S.freshShed.add(s.sid); });
+      const shedRows = (rows, flag) => { if (rows.length) S.hit = 1; rows.forEach(x => { const s = { ...x, flag, at: S.tick, sid: S.shedId++ }; S.shed.push(s); S.freshShed.add(s.sid); }); };
       const group = k => {
         const sizes = CARTS[k % CARTS.length], rows = [];
         sizes.forEach((n, i) => { for (let j = 0; j < n; j++) rows.push({ id: `${k}${LETTERS[i]}${j + 1}`, cart: `${k}${LETTERS[i]}`, letter: LETTERS[i], mode: "Periodic", proc: "Periodic" }); });
@@ -490,7 +495,8 @@
           back = back.map(x => ({ ...x, proc: "Shed" })); S.back += back.length; out.tags.push("back");
         }
         const all = chunk.concat(back);
-        S.lastChunk = { on: nOn, per: nPer, back: back.length };
+        S.lastChunk = { on: nOn, per: nPer, back: back.length, backOn: back.filter(x => x.flag === "Online").length };
+        if (back.length) S.hit = 3;
         const woke = (S.pending.length || S.held) ? true : false;
         if (woke) { out.tags.push("notify"); if (S.held) S.st.online = "woken by notify_all"; if (S.pending.length) S.st.periodic = "woken by notify_all"; }
         let left = 0;
@@ -514,9 +520,12 @@
         if (got.length) out.tags.push("get");
         const on = got.filter(x => x.mode === "Online"), per = got.filter(x => x.mode !== "Online");
         S.loadedOn += on.length; S.wait.push(...per);
+        const shedNow = on.filter(x => x.proc === "Shed").length;
+        S.loadedShed += shedNow; if (shedNow) S.hit = 4;
         if (on.length) out.tags.push("batch");
         let hourly = 0;
-        if (S.tick > 0 && S.tick % HOUR === 0) { hourly = S.wait.length; S.loadedPer += hourly; S.wait = []; out.tags.push("hour"); }
+        if (S.tick > 0 && S.tick % HOUR === 0) { hourly = S.wait.length; S.loadedPer += hourly;
+          const sh = S.wait.filter(x => x.proc === "Shed").length; S.loadedShed += sh; if (sh) S.hit = 4; S.wait = []; out.tags.push("hour"); }
         S.st.loader = got.length || hourly ? "loading" : "idle, queue empty";
         out.text = (got.length ? `<p>It took <b>${got.length}</b> finished sales from the output queue (a thread-safe <code>queue.Queue</code>, not the stream buffer). <b class="on">${on.length} online</b> are loaded at once (every 0.5 s in the real run); <b class="per">${per.length} periodic</b> wait for the hour.</p>`
                                : `<p>The output queue is empty. Nothing has finished its 9 MESHJOIN iterations yet.</p>`) +
@@ -526,17 +535,39 @@
       }
 
       function step() {
-        S.fresh = new Set(); S.freshShed = new Set();
+        S.fresh = new Set(); S.freshShed = new Set(); S.hit = 0;
         const who = ORDER[S.turn];
         const fn = { periodic: periodicTurn, online: onlineTurn, mesh: meshTurn, loader: loaderTurn }[who];
         const out = fn();
         S.acting = who; S.tags = out.tags;
         S.narr = `<h4>Tick ${S.tick} · ${NAMES[who]}</h4>${out.text}`;
+        if (S.guide && S.hit) S.narr += guideNote(S.hit);
         S.turn = (S.turn + 1) % 4;
         if (S.turn === 0) S.tick++;
         render();
       }
       const tick = () => { do step(); while (S.turn !== 0); };
+      function guideNote(h) {
+        const t = {
+          1: "Shed path, stage 1: the buffer was full in peak, so these rows went to shed_table on disk, each with its flag. Periodic is always shed first.",
+          3: "Shed path, stage 3: MESHJOIN's chunk had free places, so it filled them straight from shed_table. The rows never go back into the stream buffer, and they are deleted from shed_table.",
+          4: "Shed path, stage 4: these sales finished MESHJOIN and are loaded like any other sale, marked processing_mode = Shed. That is the end of the path."
+        }[h];
+        return t ? `<p class="th-guide">${t}</p>` : "";
+      }
+      function shedWalk() {
+        if (timer) play();
+        reset(); S.guide = true;
+        S.set.mode = "peak";
+        do step(); while (S.turn !== 0);           // tick 0 in peak: carts are shed
+        S.set.mode = "non-peak";
+        S.acting = "main"; S.tags = ["mode"]; S.lockBy = null; S.hit = 0;
+        S.narr = `<h4>Shed path: tick 0 ran in peak, now non-peak</h4>
+          <p><b>Stage 1 happened:</b> the hourly group did not fit, so <b>${S.shedP}</b> periodic sales are now in <b>shed_table</b> (bottom card, red outline). Some were whole carts that arrived too late, one was a cart pushed out of the buffer to make room for online sales.</p>
+          <p><b>Stage 2:</b> in peak they just wait on disk. The main thread has now switched to <b>non-peak</b>.</p>
+          <p><b>Next:</b> press <b>Next step</b> three times. At MeshJoinThread's turn, watch the chunk bar: the free places are filled from shed_table (stage 3). Then keep pressing to see them loaded as <b>Shed</b> (stage 4, after 9 iterations).</p>`;
+        render();
+      }
       function command(k, v) {
         if (k === "mode") S.set.mode = v;
         if (k === "source") S.set.source = v;
@@ -571,7 +602,7 @@
         ["main", "online", "periodic", "mesh", "loader", "buf", "shed"].forEach(n => r("c-" + n).classList.remove("hl"));
         if (S.acting) r("c-" + S.acting).classList.add("hl");
         if (S.lockBy) r("c-buf").classList.add("hl");
-        if (S.freshShed.size) r("c-shed").classList.add("hl");
+        if (S.freshShed.size || S.hit === 3) r("c-shed").classList.add("hl");
         const stCls = s => /woken/.test(s) ? "r" : /wait/.test(s) ? "w" : /paus|held|sleep|idle|not started|finished|reading/.test(s) ? "z" : "r";
         ["main", "online", "periodic", "mesh", "loader"].forEach(n => { const s = S.st[n]; const el = r("s-" + n); el.textContent = s; el.className = "th-state " + stCls(s); });
         r("lock").textContent = S.lockBy ? `lock held by ${NAMES[S.lockBy]}` : "lock free";
@@ -589,7 +620,22 @@
           const o = c.rows.filter(x => x.mode === "Online").length; return `<i class="f" title="${c.rows.length} sales, age ${c.age}"><span class="o" style="height:${o / CHUNK * 100}%"></span><span class="p" style="height:${(c.rows.length - o) / CHUNK * 100}%"></span></i>`; }).join("");
         r("m-last").textContent = S.lastChunk ? `${S.lastChunk.on} on + ${S.lastChunk.per} per${S.lastChunk.back ? " + " + S.lastChunk.back + " shed" : ""}` : "–";
         r("m-back").textContent = S.back;
-        r("l-on").textContent = S.loadedOn; r("l-wait").textContent = S.wait.length; r("l-per").textContent = S.loadedPer;
+        const lc = S.lastChunk;
+        r("chunkbar").innerHTML = [...Array(CHUNK)].map((_, i) => {
+          if (!lc) return `<i></i>`;
+          if (i < lc.on) return `<i class="o"></i>`;
+          if (i < lc.on + lc.per) return `<i class="p"></i>`;
+          if (i < lc.on + lc.per + lc.backOn) return `<i class="s so">S</i>`;
+          if (i < lc.on + lc.per + lc.back) return `<i class="s sp">S</i>`;
+          return `<i class="e"></i>`; }).join("");
+        const inPipe = S.mem.reduce((n, c) => n + c.rows.filter(x => x.proc === "Shed").length, 0) + S.wait.filter(x => x.proc === "Shed").length + S.output.filter(x => x.proc === "Shed").length;
+        const stage = (n, title, num, rule, extra = "") => `<div class="st ${S.hit === n ? "hit" : ""}"><div class="n">${n}</div><div><b>${title}</b><span class="v">${num}</span><p>${rule}</p>${extra}</div></div>`;
+        r("path").innerHTML = `<div class="th-path-h">The shed path</div><div class="th-path-row">` +
+          stage(1, "Shed in peak", S.shedO + S.shedP, "Buffer full: the row goes to shed_table with its flag. Periodic first, online last.") + `<span class="ar">&rarr;</span>` +
+          stage(2, "Waiting on disk", S.shed.length, "Nobody reads shed_table in peak.", S.set.mode === "peak" && S.shed.length ? `<em>waits for non-peak</em>` : "") + `<span class="ar">&rarr;</span>` +
+          stage(3, "Read back into MESHJOIN", S.back, "Non-peak only. Fills the free places of a chunk, Online flag first, then deleted from shed_table. Never back into the buffer.") + `<span class="ar">&rarr;</span>` +
+          stage(4, "Loaded as Shed", S.loadedShed, "Joined like any sale; processing_mode = Shed.", inPipe ? `<em>${inPipe} still inside MESHJOIN or waiting</em>` : "") + `</div>`;
+        r("l-on").textContent = S.loadedOn; r("l-wait").textContent = S.wait.length; r("l-per").textContent = S.loadedPer; r("l-shed").textContent = S.loadedShed;
         const so = S.shed.filter(x => x.flag === "Online"), sp = S.shed.filter(x => x.flag === "Periodic");
         lane(so, r("so"), true); lane(sp, r("sp"), true);
         r("shedcount").textContent = `${S.shed.length} on disk · shed so far: ${S.shedO} online, ${S.shedP} periodic`;
@@ -603,11 +649,12 @@
       };
       root.querySelector("[data-a=step]").onclick = step;
       root.querySelector("[data-a=tick]").onclick = tick;
+      root.querySelector("[data-a=shedwalk]").onclick = shedWalk;
       root.querySelector("[data-a=play]").onclick = play;
       root.querySelector("[data-a=reset]").onclick = () => { if (timer) play(); reset(); };
       root.querySelectorAll(".sx-seg").forEach(sg => sg.querySelectorAll("button").forEach(b => b.onclick = () => command(sg.dataset.k, b.dataset.v)));
       reset();
-      return { step, tick, reset, command, stop: () => { if (timer) play(); } };
+      return { step, tick, reset, command, shedWalk, stop: () => { if (timer) play(); } };
     }
   };
 
