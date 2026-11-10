@@ -658,6 +658,122 @@
     }
   };
 
+
+  /* =====================================================================
+     THE LOCK: one Condition shared by the threads (StreamBuffer.lock)
+     ===================================================================== */
+  const LockSim = {
+    mount(root) {
+      const PUT = [
+        "def put_online(self, row, stop_event):",
+        "    with self.lock:",
+        "        while len(self.online) + len(self.periodic) >= self.limit:",
+        "            if stop_event.is_set():",
+        "                return False",
+        "            self.lock.wait(timeout=0.2)   # sleep until MESHJOIN takes some out",
+        "        self.online.append(row)",
+        "        self.lock.notify_all()",
+        "        return True                       # leaving 'with' frees the lock",
+      ];
+      const TAKE = [
+        "def take_chunk(self, max_rows=500):",
+        "    chunk = []",
+        "    with self.lock:",
+        "        while self.online and len(chunk) < max_rows:",
+        "            chunk.append(self.online.popleft())",
+        "        ... then whole periodic carts ...",
+        "        self.lock.notify_all()            # wake a thread waiting for space",
+        "    return chunk                          # left 'with': lock is free",
+      ];
+      const ST = [
+        { h: null, fill: 1000, on: ["running", "has sale o501 to put"], me: ["running", "busy with a MESHJOIN iteration"], wait: false, put: [], take: [],
+          t: "The buffer is full", x: "Two threads want the buffer. It has one lock, like a single key to a storeroom: whoever holds it is the only one allowed to touch the two lines. Mode is non-peak, so nothing may be shed." },
+        { h: "on", fill: 1000, on: ["holds the lock", "has sale o501 to put"], me: ["running", "busy with a MESHJOIN iteration"], wait: false, put: [1], take: [],
+          t: "OnlineThread takes the lock", x: "<code>with self.lock:</code> If another thread held it, the OnlineThread would stop on this line until it was free." },
+        { h: "on", fill: 1000, on: ["holds the lock", "checks: is it full?"], me: ["running", "busy with a MESHJOIN iteration"], wait: false, put: [2], take: [],
+          t: "It checks: is there room?", x: "1,000 of 1,000. Full. In non-peak it may not shed the sale, so it has to wait for MESHJOIN to take some out." },
+        { h: null, fill: 1000, on: ["asleep in wait()", "still holding o501"], me: ["running", "busy with a MESHJOIN iteration"], wait: true, put: [5], take: [],
+          t: "wait() gives the lock back, then sleeps", x: "<b>This is the key idea.</b> While it sleeps it does <b>not</b> hold the lock, so the buffer is free for others. It also wakes every 0.2 s to check whether quit was typed." },
+        { h: "me", fill: 1000, on: ["asleep in wait()", "still holding o501"], me: ["holds the lock", "take_chunk(500)"], wait: true, put: [5], take: [2],
+          t: "MESHJOIN takes the lock", x: "This is only possible because the OnlineThread let go. If <code>wait()</code> kept the lock, each thread would wait for the other forever. That is called a deadlock." },
+        { h: "me", fill: 500, on: ["asleep in wait()", "still holding o501"], me: ["holds the lock", "took 500 sales"], wait: true, put: [5], take: [3, 4, 5],
+          t: "It takes a chunk of 500", x: "Online first, then whole periodic carts. The buffer now has room: 500 of 1,000." },
+        { h: "me", fill: 500, on: ["woken: wants the lock", "still holding o501"], me: ["holds the lock", "notify_all()"], wait: false, put: [5], take: [6],
+          t: "notify_all() wakes the sleeper", x: "The OnlineThread wakes up, but it cannot run yet: MESHJOIN still holds the lock. It waits for it." },
+        { h: null, fill: 500, on: ["woken: wants the lock", "still holding o501"], me: ["running", "joins the chunk"], wait: false, put: [5], take: [7],
+          t: "MESHJOIN lets go of the lock", x: "Leaving the <code>with</code> block frees the lock. MESHJOIN goes back to its iteration with its 500 sales." },
+        { h: "on", fill: 500, on: ["holds the lock", "checks again"], me: ["running", "joins the chunk"], wait: false, put: [2], take: [],
+          t: "The OnlineThread gets the lock back and checks again", x: "<code>wait()</code> returns only after the thread holds the lock again. The <code>while</code> loop checks again, because another thread could have filled the space first. 500 of 1,000: not full." },
+        { h: "on", fill: 501, on: ["holds the lock", "puts o501"], me: ["running", "joins the chunk"], wait: false, put: [6, 7], take: [],
+          t: "It puts its sale in and notifies", x: "The sale goes into the online line. <code>notify_all()</code> wakes anyone else who might be waiting." },
+        { h: null, fill: 501, on: ["running", "sleeps until the next sale is due"], me: ["running", "joins the chunk"], wait: false, put: [8], take: [],
+          t: "Done: the lock is free", x: "Remember three words. <b>with</b>: one thread at a time. <b>wait</b>: give the lock back and sleep. <b>notify_all</b>: wake the sleepers. In peak the same lock is used, but nobody waits: a sale that does not fit is shed." },
+      ];
+      const pad = `<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>`;
+      root.classList.add("sx");
+      root.innerHTML = `
+        <div class="sx-bar">
+          <button class="sx-btn" data-a="prev">Back</button>
+          <button class="sx-btn primary" data-a="next">Next</button>
+          <button class="sx-btn" data-a="reset">Start again</button>
+          <div class="lk-dots" data-r="dots"></div>
+          <span class="sx-meta">Step <b data-r="n">1</b> of ${ST.length}</span>
+        </div>
+        <div class="lk-stage">
+          <div class="sx-box lk-th" data-r="on"><h4>OnlineThread</h4><span class="th-state" data-r="on-s"></span><div class="lk-do" data-r="on-d"></div><div class="lk-key" data-r="on-k">${pad} lock</div></div>
+          <div class="sx-box lk-buf" data-r="buf">
+            <div class="th-head"><h4>StreamBuffer</h4><span class="lk-free" data-r="free">${pad} lock is free</span></div>
+            <div class="sx-sub">online line + periodic line &middot; limit 1,000</div>
+            <div class="lk-bar"><div data-r="fill"></div></div>
+            <div class="sx-kv"><span>in the buffer</span><b data-r="cnt"></b></div>
+            <div class="lk-room" data-r="room"><span class="lb">Waiting room of the Condition</span><span data-r="sleepers"></span></div>
+          </div>
+          <div class="sx-box lk-th" data-r="me"><h4>MeshJoinThread</h4><span class="th-state" data-r="me-s"></span><div class="lk-do" data-r="me-d"></div><div class="lk-key" data-r="me-k">${pad} lock</div></div>
+        </div>
+        <div class="lk-say"><h4 data-r="t"></h4><p data-r="x"></p></div>
+        <div class="lk-code">
+          <div><div class="lk-cap">OnlineThread runs <code>put_online</code></div><pre class="sx-code" data-r="put"></pre></div>
+          <div><div class="lk-cap">MeshJoinThread runs <code>take_chunk</code></div><pre class="sx-code" data-r="take"></pre></div>
+        </div>`;
+      const r = n => root.querySelector(`[data-r="${n}"]`);
+      let i = 0;
+      const lines = (src, on) => src.map((t, k) => `<span class="l ${on.includes(k) ? "h" : ""}">${esc(t).replace(/(#.*)$/, '<span class="c">$1</span>')}</span>`).join("");
+      const cls = s => /holds/.test(s) ? "r" : /asleep/.test(s) ? "w" : /woken/.test(s) ? "k" : "z";
+      function render() {
+        const s = ST[i];
+        r("n").textContent = i + 1;
+        r("dots").innerHTML = ST.map((_, k) => `<i class="${k === i ? "on" : k < i ? "past" : ""}"></i>`).join("");
+        [["on", s.on], ["me", s.me]].forEach(([k, v]) => {
+          r(k + "-s").textContent = v[0]; r(k + "-s").className = "th-state " + cls(v[0]);
+          r(k + "-d").textContent = v[1];
+          r(k + "-k").classList.toggle("on", s.h === k);
+          r(k).classList.toggle("hl", s.h === k);
+          r(k).classList.toggle("asleep", k === "on" && s.wait);
+        });
+        r("free").classList.toggle("on", !s.h);
+        r("free").innerHTML = s.h ? `${pad} lock held by ${s.h === "on" ? "OnlineThread" : "MeshJoinThread"}` : `${pad} lock is free`;
+        r("buf").classList.toggle("full", s.fill >= 1000);
+        r("fill").style.width = (s.fill / 10) + "%";
+        r("cnt").textContent = `${s.fill.toLocaleString("en-US")} of 1,000${s.fill >= 1000 ? " (full)" : ""}`;
+        r("sleepers").innerHTML = s.wait ? `<span class="lk-zz">OnlineThread (asleep, lock given back)</span>` : `<span class="sx-faint">empty</span>`;
+        r("room").classList.toggle("busy", s.wait);
+        r("t").textContent = s.t; r("x").innerHTML = s.x;
+        r("put").innerHTML = lines(PUT, s.put); r("take").innerHTML = lines(TAKE, s.take);
+        root.querySelector("[data-a=prev]").disabled = i === 0;
+        root.querySelector("[data-a=next]").disabled = i === ST.length - 1;
+      }
+      const next = () => { if (i < ST.length - 1) { i++; render(); } };
+      const prev = () => { if (i > 0) { i--; render(); } };
+      const reset = () => { i = 0; render(); };
+      root.querySelector("[data-a=next]").onclick = next;
+      root.querySelector("[data-a=prev]").onclick = prev;
+      root.querySelector("[data-a=reset]").onclick = reset;
+      render();
+      return { next, prev, reset, stop: () => {} };
+    }
+  };
+
+  window.LockSim = LockSim;
   window.MeshSim = MeshSim;
   window.ThreadSim = ThreadSim;
 })();

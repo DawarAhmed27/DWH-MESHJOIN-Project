@@ -80,7 +80,9 @@ function showSim(tab) {
   showSim.tab = tab;
   if (!SIM.threads && window.ThreadSim) SIM.threads = ThreadSim.mount($("#sim-threads"));
   if (!SIM.meshjoin && window.MeshSim) SIM.meshjoin = MeshSim.mount($("#sim-meshjoin"));
+  if (!SIM.lock && window.LockSim) SIM.lock = LockSim.mount($("#sim-lock"));
   $("#sim-threads").hidden = tab !== "threads";
+  $("#sim-lock").hidden = tab !== "lock";
   $("#sim-meshjoin").hidden = tab !== "meshjoin";
   Object.entries(SIM).forEach(([k, s]) => { if (k !== tab) s.stop(); });
   setSeg($("#simTab"), tab);
@@ -577,6 +579,12 @@ const STEPS = [
     say: ["Four threads plus the main thread. They meet at one stream buffer: two deques with one limit, guarded by one threading.Condition, so only one thread changes it at a time.",
           "In non-peak a full buffer means wait(); wait releases the lock so MESHJOIN can make room. In peak nobody waits: periodic is shed first, online only as the last resort.",
           "This is a small model of the same code: buffer 20 instead of 1,000, chunk 10 instead of 500."] },
+  { title: "The lock: with, wait, notify_all", page: "explain", tab: "lock",
+    actions: [["Next", () => SIM.lock.next()], ["Back", () => SIM.lock.prev()], ["Start again", () => SIM.lock.reset()]],
+    show: ["Buffer full in non-peak: the OnlineThread takes the lock, finds no room, calls wait().", "wait() gives the lock back, so MESHJOIN can take a chunk.", "notify_all() wakes the OnlineThread; it gets the lock back, checks again and puts its sale."],
+    say: ["The buffer has one threading.Condition. with self.lock means one thread at a time.",
+          "wait() releases the lock while sleeping; otherwise MESHJOIN could never get in to make room, and both would wait forever: a deadlock.",
+          "notify_all() after taking a chunk wakes the sleeper; the while loop checks the room again before putting."] },
   { title: "Start: three threads", page: "live", action: ["Start threads", () => $("#startBtn").click()],
     show: ["OnlineThread sends at the peak speed.", "PeriodicThread releases one group per hour (the 48 squares).", "The buffer fills, MESHJOIN takes up to 500 per iteration."],
     say: ["Each thread has its own MySQL connection. The buffer has two lines; MESHJOIN always takes online first."] },
