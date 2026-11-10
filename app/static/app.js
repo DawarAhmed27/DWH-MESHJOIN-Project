@@ -52,6 +52,7 @@ const compact = v => Math.abs(v) >= 1e6 ? (v / 1e6).toFixed(1) + "M" : Math.abs(
 const PAGES = {
   overview: ["Overview", "Online Retail, 1 Dec 2010 – 9 Dec 2011"],
   setup: ["Setup", "Connection, settings and data preparation"],
+  explain: ["How it works", "Step-through models of the threads and MESHJOIN"],
   live: ["Live run", "The three threads, MESHJOIN, load shedding and the loader"],
   dw: ["Data warehouse", "Star schema and working tables"],
   analysis: ["Analysis", "Queries-DW.sql"],
@@ -69,7 +70,20 @@ function go(page) {
   if (page === "dw") loadSchema();
   if (page === "analysis" && !QUERIES.length) loadQueries();
   if (page === "live" && charts["c-thr"]) charts["c-thr"].resize();
+  if (page === "explain") showSim(showSim.tab || "threads");
 }
+/* ================= how it works: manual simulators ================= */
+const SIM = {};
+function showSim(tab) {
+  showSim.tab = tab;
+  if (!SIM.threads && window.ThreadSim) SIM.threads = ThreadSim.mount($("#sim-threads"));
+  if (!SIM.meshjoin && window.MeshSim) SIM.meshjoin = MeshSim.mount($("#sim-meshjoin"));
+  $("#sim-threads").hidden = tab !== "threads";
+  $("#sim-meshjoin").hidden = tab !== "meshjoin";
+  Object.entries(SIM).forEach(([k, s]) => { if (k !== tab) s.stop(); });
+  setSeg($("#simTab"), tab);
+}
+$$("#simTab button").forEach(b => b.addEventListener("click", () => showSim(b.dataset.v)));
 $$("#nav button").forEach(b => b.addEventListener("click", () => go(b.dataset.page)));
 document.addEventListener("click", e => { const g = e.target.closest("[data-go]"); if (g) go(g.dataset.go); });
 
@@ -529,9 +543,20 @@ const STEPS = [
     show: ["Create-DW.sql first drops everything.", "Cleaning: 541,909 → 397,884.", "sales_mode: 69.99 % online carts, 30.01 % periodic.", "Partitions: 9 customer, 8 product. 48 groups of 2,263 to 2,710 rows."],
     say: ["Only the four cleaning rules of the PDF: customer present, no C invoices, quantity and price above zero.",
           "The MD5 rule labels whole carts, so one cart is never split. The 48 groups also keep carts whole."] },
+  { title: "How the threads share the buffer", page: "explain", tab: "threads",
+    actions: [["Next step", () => SIM.threads.step()], ["Next tick", () => SIM.threads.tick()], ["Non-peak", () => SIM.threads.command("mode", "non-peak")], ["Peak", () => SIM.threads.command("mode", "peak")], ["Reset", () => SIM.threads.reset()]],
+    show: ["Tick 0 in peak: group 0 arrives; carts that fit go in, the rest are shed whole.", "OnlineThread at a full buffer: the newest periodic cart is pushed out to shed_table.", "MeshJoinThread takes 10: online first, then whole carts.", "Switch to non-peak: threads wait() instead of shedding; notify_all() wakes them; shed sales come back."],
+    say: ["Four threads plus the main thread. They meet at one stream buffer: two deques with one limit, guarded by one threading.Condition, so only one thread changes it at a time.",
+          "In non-peak a full buffer means wait(); wait releases the lock so MESHJOIN can make room. In peak nobody waits: periodic is shed first, online only as the last resort.",
+          "This is a small model of the same code: buffer 20 instead of 1,000, chunk 10 instead of 500."] },
   { title: "Start: three threads", page: "live", action: ["Start threads", () => $("#startBtn").click()],
     show: ["OnlineThread sends at the peak speed.", "PeriodicThread releases one group per hour (the 48 squares).", "The buffer fills, MESHJOIN takes up to 500 per iteration."],
     say: ["Each thread has its own MySQL connection. The buffer has two lines; MESHJOIN always takes online first."] },
+  { title: "MESHJOIN step by step", page: "explain", tab: "meshjoin",
+    actions: [["Next step", () => SIM.meshjoin.step()], ["Next iteration", () => SIM.meshjoin.iter()], ["Reset", () => SIM.meshjoin.reset()]],
+    show: ["The four steps of one iteration light up the parts they use.", "The staircase: each chunk fills one customer and one product page per iteration.", "Chunk #1 leaves at the end of iteration 9; the traced sale's attributes were filled in iterations 4 and 7."],
+    say: ["Looking up every sale would cost two random disk reads per sale. MESHJOIN reads one page of each master table per iteration and matches it against every sale in memory at once.",
+          "H is two dictionaries over the same sale objects; the queue keeps arrival order. A chunk stays max(9, 8) = 9 iterations: every customer page once, every product page with one repeat, which the matched flag ignores."] },
   { title: "Inside MESHJOIN", page: "live",
     show: ["The two dials: one customer page and one product page are read per iteration.", "The queue: each chunk shows how many iterations it has seen."],
     say: ["Two master tables: I scan both together. A chunk stays max(9, 8) = 9 iterations, so it meets every customer page once and every product page; one product page comes twice, so a matched flag stops double enrichment.",
@@ -573,9 +598,12 @@ function renderPresenter() {
   $("#pbody").innerHTML = `<h4>${s.title}</h4>
     <div><div class="lab">Show</div><ul>${s.show.map(x => `<li>${x}</li>`).join("")}</ul></div>
     <div><div class="lab">Say</div><div class="say">${s.say.map(x => `<p>${x}</p>`).join("")}</div></div>
-    ${s.action ? `<div><button class="btn primary" id="prAction">${icon("play")}${s.action[0]}</button></div>` : ""}`;
+    ${s.action ? `<div><button class="btn primary" id="prAction">${icon("play")}${s.action[0]}</button></div>` : ""}
+    ${s.actions ? `<div><div class="lab">Simulator</div><div class="acts">${s.actions.map((a, i) => `<button class="btn ${i === 0 ? "primary" : ""}" data-act="${i}">${a[0]}</button>`).join("")}</div></div>` : ""}`;
   if (s.action) $("#prAction").addEventListener("click", () => { s.action[1](); toast(s.action[0]); });
+  if (s.actions) $$("#pbody [data-act]").forEach(b => b.addEventListener("click", () => s.actions[+b.dataset.act][1]()));
   go(s.page);
+  if (s.tab) showSim(s.tab);
   $("#prPrev").disabled = PI === 0; $("#prNext").textContent = PI === STEPS.length - 1 ? "Finish" : "Next";
 }
 $("#presentBtn").addEventListener("click", () => { presenter(true); renderPresenter(); });

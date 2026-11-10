@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/sims.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -28,6 +29,7 @@
     <nav class="nav" id="nav" aria-label="Pages">
       <button data-page="overview"><span class="stop"></span>Overview</button>
       <button data-page="setup"><span class="stop"></span>Setup</button>
+      <button data-page="explain"><span class="stop"></span>How it works</button>
       <button data-page="live"><span class="stop"></span>Live run</button>
       <button data-page="dw"><span class="stop"></span>Data warehouse</button>
       <button data-page="analysis"><span class="stop"></span>Analysis</button>
@@ -232,6 +234,15 @@
       </section>
 
       <!-- ================= CHECKS ================= -->
+      <section class="page" id="p-explain">
+        <div class="sim-head">
+          <div class="seg" id="simTab"><button data-v="threads">Threads &amp; stream buffer</button><button data-v="meshjoin">MESHJOIN</button></div>
+          <p class="note">A manual model of the real code, one step at a time. It does not touch the database and can be used before or during a run.</p>
+        </div>
+        <div class="panel sim-panel" id="sim-threads"></div>
+        <div class="panel sim-panel" id="sim-meshjoin" hidden></div>
+      </section>
+
       <section class="page" id="p-checks">
         <div class="section">
           <div class="sec-head"><div><h3>Is the DW right?</h3><div class="note" style="margin-top:4px">Expected values come from the working data (the online file and the staging table), not from the DW.</div></div><button class="btn primary" id="checkBtn">Run the checks</button></div>
@@ -251,6 +262,7 @@
 <div class="toast" id="toast" role="status"></div>
 
 <script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/sims.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>
