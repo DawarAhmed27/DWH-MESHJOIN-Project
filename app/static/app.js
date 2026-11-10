@@ -53,6 +53,7 @@ const PAGES = {
   overview: ["Overview", "Online Retail, 1 Dec 2010 – 9 Dec 2011"],
   setup: ["Setup", "Connection, settings and data preparation"],
   explain: ["How it works", "Step-through models of the threads and MESHJOIN"],
+  console: ["Console", "The terminal program's commands and output"],
   live: ["Live run", "The three threads, MESHJOIN, load shedding and the loader"],
   dw: ["Data warehouse", "Star schema and working tables"],
   analysis: ["Analysis", "Queries-DW.sql"],
@@ -71,6 +72,7 @@ function go(page) {
   if (page === "analysis" && !QUERIES.length) loadQueries();
   if (page === "live" && charts["c-thr"]) charts["c-thr"].resize();
   if (page === "explain") showSim(showSim.tab || "threads");
+  if (page === "console") { loadTerm(); setTimeout(() => $("#termIn").focus(), 50); }
 }
 /* ================= how it works: manual simulators ================= */
 const SIM = {};
@@ -351,7 +353,7 @@ function renderLive(s) {
 function renderConsole(log) {
   const el = $("#console");
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 30;
-  el.innerHTML = log.length ? log.map(l => `<div class="${l.kind}"><span class="t">${new Date(l.t * 1000).toTimeString().slice(0, 8)}</span>${esc(l.text)}</div>`).join("")
+  el.innerHTML = log.length ? log.map(l => `<div class="${l.kind}"><span class="t">${new Date(l.t * 1000).toTimeString().slice(0, 8)}</span>${l.kind === "in" ? "&gt; " : ""}${esc(l.text)}</div>`).join("")
     : `<div class="faint">Nothing yet.</div>`;
   if (atBottom) el.scrollTop = el.scrollHeight;
 }
@@ -379,7 +381,33 @@ async function poll() {
   lastPrep = s.prep.state;
   renderLive(s);
   renderConsole(s.log);
+  if (go.current === "console") loadTerm();
 }
+/* ================= console ================= */
+let termFrom = 0;
+const termHist = []; let termPos = 0;
+async function loadTerm() {
+  let log; try { log = await api("/api/log"); } catch (e) { return; }
+  const el = $("#termOut");
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  const rows = log.filter(l => l.t >= termFrom);
+  el.innerHTML = rows.length ? rows.map(l => `<div class="${l.kind}"><span class="t">${new Date(l.t * 1000).toTimeString().slice(0, 8)}</span>${l.kind === "in" ? "&gt; " : ""}${esc(l.text)}</div>`).join("")
+    : `<div class="info">Type help for the list of commands. Connect, prepare and start in Setup and Live run; their messages appear here.</div>`;
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+async function termRun(line) {
+  if (!line.trim()) return;
+  termHist.push(line); termPos = termHist.length;
+  try { await api("/api/console", { line }); } catch (e) { toast(e.message); }
+  const el = $("#termOut"); await loadTerm(); el.scrollTop = el.scrollHeight; poll();
+}
+$("#termForm").addEventListener("submit", e => { e.preventDefault(); const v = $("#termIn").value; $("#termIn").value = ""; termRun(v); });
+$("#termIn").addEventListener("keydown", e => {
+  if (e.key === "ArrowUp" && termPos > 0) { termPos--; $("#termIn").value = termHist[termPos]; e.preventDefault(); }
+  if (e.key === "ArrowDown") { termPos = Math.min(termHist.length, termPos + 1); $("#termIn").value = termHist[termPos] || ""; e.preventDefault(); }
+});
+$$("#termChips [data-cmd]").forEach(b => b.addEventListener("click", () => termRun(b.dataset.cmd)));
+$("#termClear").addEventListener("click", () => { termFrom = Date.now() / 1000; loadTerm(); });
 function loop() { const fast = ST && (ST.running || ST.prep.state === "running"); poll().finally(() => setTimeout(loop, fast ? 700 : 2500)); }
 
 /* ================= DW ================= */

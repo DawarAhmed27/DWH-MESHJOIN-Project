@@ -246,7 +246,7 @@ svg.i { width: 14px; height: 14px; flex: none; stroke: currentColor; fill: none;
 .log .t { color: var(--ink-3); margin-right: var(--s3); }
 .log .ok { color: var(--ok); }
 .log .error { color: var(--shed); }
-.log .cmd { color: var(--online); }
+.log .cmd, .log .in { color: var(--online); }
 .done-bar { display: none; align-items: center; gap: var(--s3); padding: var(--s3) var(--s4); border-radius: var(--r); background: var(--ok-tint); color: #1E5E3C; font-size: var(--t-md); }
 .done-bar.on { display: flex; }
 
@@ -295,6 +295,27 @@ select.input { padding-right: 24px; font-size: var(--t-sm); }
 .ck svg { width: 11px; height: 11px; stroke: #fff; stroke-width: 2.6; fill: none; }
 
 /* ================= presenter ================= */
+/* ================= console ================= */
+.term { display: flex; flex-direction: column; height: calc(100vh - 230px); min-height: 360px; overflow: hidden; }
+.term-head { display: flex; align-items: center; gap: var(--s4); padding: var(--s3) var(--s4); border-bottom: 1px solid var(--hair); flex-wrap: wrap; }
+.term-head .mono { font-size: var(--t-sm); font-weight: 600; }
+.term-head .note { flex: 1; font-size: var(--t-xs); color: var(--ink-3); }
+.term-out { flex: 1; min-height: 0; overflow-y: auto; padding: var(--s3) var(--s4); font: 12.5px/1.55 var(--mono); background: #FCFCFB; }
+.term-out div { white-space: pre-wrap; color: var(--ink); }
+.term-out .t { color: var(--ink-3); margin-right: var(--s3); user-select: none; }
+.term-out .info, .term-out .out { color: var(--ink-2); }
+.term-out .in { color: var(--online); font-weight: 600; margin-top: 6px; }
+.term-out .ok { color: var(--ok); }
+.term-out .error { color: var(--shed); }
+.term-out .cmd { color: var(--online); }
+.term-in { display: flex; align-items: center; gap: var(--s2); border-top: 1px solid var(--hair); padding: var(--s2) var(--s4); background: var(--panel); }
+.term-in label { color: var(--accent); font-weight: 600; }
+.term-in input { flex: 1; border: 0; outline: 0; background: transparent; font-size: 13px; height: 32px; }
+.term-chips { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.term-chips .lbl { font-size: var(--t-xs); color: var(--ink-3); margin-right: var(--s2); }
+.term-chips .sep { width: 1px; height: 20px; background: var(--hair-2); margin: 0 var(--s1); }
+.term-chips .btn { font-family: var(--mono); }
+
 /* ================= how it works (sims.css) ================= */
 .sim-head { display: flex; align-items: center; gap: var(--s4); flex-wrap: wrap; }
 .sim-head .note { font-size: var(--t-sm); color: var(--ink-3); margin: 0; }

@@ -35,6 +35,7 @@ import splitting         # noqa: E402
 import stream            # noqa: E402
 import working_data      # noqa: E402
 from loader import LoaderThread  # noqa: E402
+import main as cli        # noqa: E402  (HELP and print_status, same text as the terminal)
 
 app = Flask(__name__, static_folder=os.path.join(APP_DIR, "static"), static_url_path="/static")
 
@@ -79,7 +80,7 @@ class Engine:
     def say(self, text, kind="info"):
         with self.lock:
             self.log.append((time.time(), kind, text))
-            del self.log[:-400]
+            del self.log[:-1500]
 
     # ---------- connection ----------
     def connect(self):
@@ -125,7 +126,9 @@ class Engine:
                 self.online_file = os.path.join(out_dir, "online_sales_stream.csv")
                 online.to_csv(self.online_file, index=False)
                 periodic = working_data.build_periodic(df)
+                t_stage = time.time()
                 db.insert_rows(conn, "periodic_sales_data", periodic)
+                print(f"Staging table filled in {time.time() - t_stage:.1f} s ({len(periodic):,} rows)")
                 self.expected = len(online) + len(periodic)
                 sizes = periodic.groupby("release_hour").size()
                 steps["working_sizes"] = [int(x) for x in sizes.tolist()]
@@ -156,6 +159,68 @@ class Engine:
         self.running = True
         self.started_at = time.time()
         self.say(f"Threads started in {s.mode} mode ({s.tps()}/s, hour = {s.hour_seconds} s)", "ok")
+        for line in self.settings_lines():
+            self.say(line, "out")
+
+    def settings_lines(self):
+        s = self.settings
+        return [f"Stream arrival mode:   {s.mode}",
+                f"Peak speed:            {s.peak_tps} transactions/second",
+                f"Non-peak speed:        {s.nonpeak_tps} transactions/second",
+                f"One simulated hour:    {s.hour_seconds} seconds",
+                f"Stream buffer limit:   {cli.STREAM_BUFFER_LIMIT:,} transactions"]
+
+    def console(self, line):
+        """One line typed in the Console page: the same commands and the same
+        answers as the terminal program (src/main.py)."""
+        self.say(line, "in")
+        words = line.strip().lower().split()
+        s = self.settings
+        out, kind = [], "out"
+        if not words:
+            return
+        cmd = words[0]
+        if cmd in ("online", "periodic", "both"):
+            s.source = cmd
+            out = [f"Source is now: {cmd}"]
+        elif cmd in ("peak", "non-peak"):
+            s.mode = cmd
+            out = [f"Mode is now: {cmd} ({s.tps()} transactions/second)"]
+        elif cmd == "speed" and len(words) == 3 and words[1] in ("peak", "non-peak") \
+                and words[2].isdigit() and int(words[2]) > 0:
+            if words[1] == "peak":
+                s.peak_tps = int(words[2])
+            else:
+                s.nonpeak_tps = int(words[2])
+            out = [f"{words[1]} speed is now {words[2]} transactions/second"]
+        elif cmd == "status":
+            if not self.threads:
+                out = ["The threads have not been started (Live run > Start threads)."] + self.settings_lines()
+            else:
+                t = self.threads
+                buf = io.StringIO()
+                try:
+                    c = self.connect()
+                    with contextlib.redirect_stdout(buf):
+                        cli.print_status(s, t["buffer"], t["mesh"], t["online"], t["periodic"], t["loader"], c)
+                    c.close()
+                    out = buf.getvalue().splitlines()
+                    if not self.running:
+                        out.insert(0, "(threads stopped)")
+                except Exception as e:
+                    out, kind = [f"Status failed: {e}"], "error"
+        elif cmd == "help":
+            out = cli.HELP.splitlines()
+        elif cmd == "quit":
+            if not self.running:
+                out, kind = ["The threads are not running."], "error"
+            else:
+                out = ["Stopping the threads ..."]
+                threading.Thread(target=self.stop, daemon=True).start()
+        else:
+            out, kind = ["Unknown command. Type help for the list."], "error"
+        for l in out:
+            self.say(l, kind)
 
     def stop(self):
         t = self.threads
@@ -327,6 +392,19 @@ def api_command():
     else:
         return jsonify(error="Unknown command."), 400
     return jsonify(ok=True)
+
+
+@app.post("/api/console")
+def api_console():
+    E.console((request.get_json() or {}).get("line", ""))
+    return jsonify(ok=True)
+
+
+@app.get("/api/log")
+def api_log():
+    with E.lock:
+        log = list(E.log)
+    return jsonify([{"t": round(t, 2), "kind": k, "text": x} for t, k, x in log])
 
 
 @app.get("/api/status")

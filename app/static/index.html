@@ -31,6 +31,7 @@
       <button data-page="setup"><span class="stop"></span>Setup</button>
       <button data-page="explain"><span class="stop"></span>How it works</button>
       <button data-page="live"><span class="stop"></span>Live run</button>
+      <button data-page="console"><span class="stop"></span>Console</button>
       <button data-page="dw"><span class="stop"></span>Data warehouse</button>
       <button data-page="analysis"><span class="stop"></span>Analysis</button>
       <button data-page="checks"><span class="stop"></span>Checks</button>
@@ -241,6 +242,24 @@
         </div>
         <div class="panel sim-panel" id="sim-threads"></div>
         <div class="panel sim-panel" id="sim-meshjoin" hidden></div>
+      </section>
+
+      <section class="page" id="p-console">
+        <div class="panel term">
+          <div class="term-head"><span class="mono">python src/main.py</span><span class="note">Same commands and the same answers as the terminal program. Preparation and thread messages appear here too.</span><button class="btn ghost" id="termClear">Clear</button></div>
+          <div class="term-out" id="termOut" aria-live="polite"></div>
+          <form class="term-in" id="termForm"><label for="termIn" class="mono">&gt;</label><input id="termIn" class="mono" autocomplete="off" spellcheck="false" placeholder="type a command, for example status"></form>
+        </div>
+        <div class="term-chips" id="termChips">
+          <span class="lbl">Quick commands</span>
+          <button class="btn" data-cmd="status">status</button><button class="btn" data-cmd="help">help</button>
+          <span class="sep"></span>
+          <button class="btn" data-cmd="peak">peak</button><button class="btn" data-cmd="non-peak">non-peak</button>
+          <span class="sep"></span>
+          <button class="btn" data-cmd="online">online</button><button class="btn" data-cmd="periodic">periodic</button><button class="btn" data-cmd="both">both</button>
+          <span class="sep"></span>
+          <button class="btn danger" data-cmd="quit">quit</button>
+        </div>
       </section>
 
       <section class="page" id="p-checks">
