@@ -134,7 +134,9 @@ def main():
     online_file = os.path.join(out_dir, "online_sales_stream.csv")
     online.to_csv(online_file, index=False)
     periodic = working_data.build_periodic(df)
+    t_stage = time.time()
     db.insert_rows(conn, "periodic_sales_data", periodic)
+    print(f"Staging table filled in {time.time() - t_stage:.1f} s ({len(periodic):,} rows)")
 
     print("\n--- Loaded into MySQL ---")
     for table in ["customer_master_data", "product_master_data", "periodic_sales_data"]:
