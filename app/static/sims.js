@@ -774,6 +774,113 @@
   };
 
   window.LockSim = LockSim;
+
+  /* =====================================================================
+     KEEPING THE SPEED: the OnlineThread's timetable (next_time)
+     ===================================================================== */
+  const SpeedSim = {
+    mount(root) {
+      const GAP = 100, WORK = 20, END = 1000, B0 = 300, B1 = 650;   // 10 TPS, drawn in ms
+      const CODE = [
+        ["next_time = time.time()                      # before the first sale", "start"],
+        ["for row in csv.DictReader(f):", "all"],
+        ["    ... put the sale in the buffer (may wait if full) ...", "put"],
+        ["    next_time += 1.0 / self.settings.tps()   # when the next sale is due", "tt"],
+        ["    delay = next_time - time.time()", "tt"],
+        ["    if delay > 0:", "tt"],
+        ["        time.sleep(delay)                    # sleep only the time that is left", "tt"],
+        ["    else:", "late"],
+        ["        next_time = time.time()              # held up: don't rush to catch up", "late"],
+      ];
+      // run the loop the way the code does; returns send times (ms)
+      function run(kind, blocked) {
+        let now = 0, next = 0; const sent = [];
+        while (now < END) {
+          if (blocked && now >= B0 && now < B1) now = B1;          // put_online waits for room
+          if (now >= END) break;
+          sent.push(now); now += WORK;
+          if (kind === "naive") { now += GAP; continue; }         // time.sleep(1 / tps)
+          next += GAP;
+          const delay = next - now;
+          if (delay > 0) now += delay; else if (kind === "ours") next = now;
+        }
+        return sent;
+      }
+      const SCENES = {
+        why: { rows: [["due", "Due times at 10 TPS", null], ["naive", "If it slept 1/tps after each sale", run("naive", false)], ["ours", "Our timetable (next_time)", run("ours", false)]],
+               blocked: false, tags: ["start", "tt"],
+               t: "Why keep a timetable?",
+               x: "At 10 TPS a sale is due every 100 ms (at 80 TPS, every 12.5 ms). Putting a sale in the buffer, and maybe writing to MySQL, also takes time. If the thread simply slept 100 ms after each sale, that work would be added every time and the stream would run slower than asked. Our thread remembers <b>when the next sale is due</b> and sleeps only the time that is left, so it stays on time." },
+        late: { rows: [["due", "Due times at 10 TPS", null], ["rush", "If it rushed to catch up", run("rush", true)], ["ours", "Ours: restart the clock", run("ours", true)]],
+               blocked: true, tags: ["put", "late"],
+               t: "What if the buffer is full?",
+               x: "In non-peak the buffer can be full, so <code>put_online</code> waits (shaded). When it finally gets in, it is late and <code>delay</code> is negative. If it kept the old timetable, it would send all the missed sales at once, a burst far above 10 TPS. Instead it sets <code>next_time = time.time()</code>: the next sale goes right away, then it is back to one every 100 ms. No burst." },
+      };
+      root.classList.add("sx");
+      root.innerHTML = `
+        <div class="sx-bar">
+          <span class="sx-seg" data-r="scene"><button data-v="why">1. Why a timetable</button><button data-v="late">2. When it is held up</button></span>
+          <button class="sx-btn primary" data-a="play">Play</button>
+          <span class="sx-meta">1 second shown at 10 TPS so each sale is visible</span>
+        </div>
+        <div class="sp-chart"><svg data-r="svg" viewBox="0 0 940 256" role="img" aria-label="Send times of online sales on a one-second time line"></svg></div>
+        <div class="lk-say"><h4 data-r="t"></h4><p data-r="x"></p></div>
+        <pre class="sx-code" data-r="code"></pre>`;
+      const r = n => root.querySelector(`[data-r="${n}"]`);
+      const X = ms => 250 + ms / END * 610;
+      let scene = "why", head = END, timer = null;
+      function draw() {
+        const sc = SCENES[scene], rowH = 62, top = 30;
+        let g = `<g font-family="var(--mono)" font-size="13" fill="var(--ink-3)">`;
+        for (let ms = 0; ms <= END; ms += 100) g += `<line x1="${X(ms)}" y1="${top - 6}" x2="${X(ms)}" y2="${top + rowH * 3 - 8}" stroke="var(--hair)" stroke-dasharray="${ms % 500 ? "2 4" : ""}"/><text x="${X(ms)}" y="${top - 12}" text-anchor="middle">${ms === END ? "1000 ms" : ms + " ms"}</text>`;
+        g += `</g>`;
+        if (sc.blocked) g += `<rect x="${X(B0)}" y="${top + rowH - 6}" width="${X(B1) - X(B0)}" height="${rowH * 2 - 4}" fill="#F3DFC0" opacity=".75"/><text x="${(X(B0) + X(B1)) / 2}" y="${top + rowH * 3 + 8}" text-anchor="middle" font-size="14" fill="#6B4206" font-family="var(--font)">buffer full: put_online waits</text>`;
+        sc.rows.forEach(([kind, label, sent], i) => {
+          const y = top + i * rowH + 18;
+          g += `<text x="0" y="${y + 5}" font-size="15" font-family="var(--font)" fill="var(--ink)" font-weight="${kind === "ours" ? 600 : 400}">${label}</text>`;
+          g += `<line x1="${X(0)}" y1="${y}" x2="${X(END)}" y2="${y}" stroke="var(--hair-2)"/>`;
+          if (!sent) {
+            for (let ms = 0; ms < END; ms += GAP) g += `<circle cx="${X(ms)}" cy="${y}" r="4" fill="none" stroke="var(--ink-3)" stroke-width="1.5"/>`;
+            g += `<text x="${X(END) + 46}" y="${y + 4}" text-anchor="middle" font-size="13.5" fill="var(--ink-3)" font-family="var(--font)">10</text>`;
+            return;
+          }
+          const col = kind === "ours" ? "var(--online)" : kind === "naive" ? "var(--ink-3)" : "var(--shed)";
+          const shown = sent.filter(ms => ms <= head);
+          shown.forEach(ms => { g += `<rect x="${X(ms)}" y="${y - 11}" width="${X(ms + WORK) - X(ms)}" height="22" fill="${col}" opacity=".18"/><rect x="${X(ms) - 2}" y="${y - 11}" width="4" height="22" rx="1" fill="${col}"/>`; });
+          g += `<text x="${X(END) + 46}" y="${y + 4}" text-anchor="middle" font-size="13.5" font-weight="600" fill="${col}" font-family="var(--font)">${shown.length}</text>`;
+          if (kind === "rush" && head >= B1 + 100) {
+            const burst = sent.filter(ms => ms >= B1 && ms < B1 + 100).length;
+            g += `<text x="${X(B1 + 50)}" y="${y + 28}" text-anchor="middle" font-size="13.5" fill="var(--shed)" font-family="var(--font)">${burst} sales in 100 ms = ${burst * 10} TPS burst</text>`;
+          }
+          if (kind === "naive" && head >= END) g += `<text x="${X(END)}" y="${y + 28}" text-anchor="end" font-size="13.5" fill="var(--ink-3)" font-family="var(--font)">only ${shown.length} sales in 1 s instead of 10: too slow</text>`;
+          if (kind === "ours" && head >= END) g += `<text x="${X(END)}" y="${y + 28}" text-anchor="end" font-size="13.5" fill="var(--online)" font-family="var(--font)">${sc.blocked ? "one sale right away, then one every 100 ms again" : "exactly one every 100 ms"}</text>`;
+        });
+        g += `<line x1="${X(head)}" y1="${top - 4}" x2="${X(head)}" y2="${top + rowH * 3 - 8}" stroke="var(--accent)" stroke-width="1.5" opacity="${head < END ? 1 : 0}"/>`;
+        g += `<text x="${X(END) + 46}" y="${top - 12}" font-size="13" fill="var(--ink-3)" font-family="var(--font)" text-anchor="middle">sent</text>`;
+        r("svg").innerHTML = g;
+      }
+      function render() {
+        const sc = SCENES[scene];
+        r("scene").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.v === scene));
+        r("t").textContent = sc.t; r("x").innerHTML = sc.x;
+        r("code").innerHTML = codeHTML(CODE, sc.tags);
+        draw();
+      }
+      function play() {
+        const btn = root.querySelector("[data-a=play]");
+        if (timer) { clearInterval(timer); timer = null; btn.textContent = "Play"; return; }
+        head = 0; btn.textContent = "Pause";
+        timer = setInterval(() => { head += 10; if (head >= END) { head = END; clearInterval(timer); timer = null; btn.textContent = "Play"; } draw(); }, 30);
+      }
+      const setScene = v => { scene = v; if (timer) play(); head = END; render(); };
+      r("scene").querySelectorAll("button").forEach(b => b.onclick = () => setScene(b.dataset.v));
+      root.querySelector("[data-a=play]").onclick = play;
+      render();
+      return { play, scene: setScene, stop: () => { if (timer) play(); } };
+    }
+  };
+
+  window.SpeedSim = SpeedSim;
   window.MeshSim = MeshSim;
   window.ThreadSim = ThreadSim;
 })();

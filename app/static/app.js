@@ -81,6 +81,8 @@ function showSim(tab) {
   if (!SIM.threads && window.ThreadSim) SIM.threads = ThreadSim.mount($("#sim-threads"));
   if (!SIM.meshjoin && window.MeshSim) SIM.meshjoin = MeshSim.mount($("#sim-meshjoin"));
   if (!SIM.lock && window.LockSim) SIM.lock = LockSim.mount($("#sim-lock"));
+  if (!SIM.speed && window.SpeedSim) SIM.speed = SpeedSim.mount($("#sim-speed"));
+  $("#sim-speed").hidden = tab !== "speed";
   $("#sim-threads").hidden = tab !== "threads";
   $("#sim-lock").hidden = tab !== "lock";
   $("#sim-meshjoin").hidden = tab !== "meshjoin";
@@ -585,6 +587,11 @@ const STEPS = [
     say: ["The buffer has one threading.Condition. with self.lock means one thread at a time.",
           "wait() releases the lock while sleeping; otherwise MESHJOIN could never get in to make room, and both would wait forever: a deadlock.",
           "notify_all() after taking a chunk wakes the sleeper; the while loop checks the room again before putting."] },
+  { title: "Keeping the speed (TPS)", page: "explain", tab: "speed",
+    actions: [["Play", () => SIM.speed.play()], ["1. Why a timetable", () => SIM.speed.scene("why")], ["2. When it is held up", () => SIM.speed.scene("late")]],
+    show: ["Scene 1: sleeping 1/tps after each sale gives fewer than 10 sales a second (9 here); the timetable gives exactly 10.", "Scene 2: after the buffer was full, rushing would send a burst; we restart the clock instead."],
+    say: ["TPS is transactions per second: 80 in peak, 10 in non-peak. The OnlineThread keeps a timetable, next_time += 1/tps, and sleeps only the time that is left.",
+          "If it was held up, delay is negative, and it sets next_time = now: it carries on at the normal rate without a burst."] },
   { title: "Start: three threads", page: "live", action: ["Start threads", () => $("#startBtn").click()],
     show: ["OnlineThread sends at the peak speed.", "PeriodicThread releases one group per hour (the 48 squares).", "The buffer fills, MESHJOIN takes up to 500 per iteration."],
     say: ["Each thread has its own MySQL connection. The buffer has two lines; MESHJOIN always takes online first."] },
