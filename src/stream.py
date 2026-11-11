@@ -194,7 +194,7 @@ class OnlineThread(threading.Thread):
                 if delay > 0:
                     time.sleep(delay)
                 else:
-                    next_time = time.time()   #we were held up (buffer full): don't rush to catch up
+                    next_time = time.time()   #held up (buffer full): don't rush to catch up
         conn.close()
         self.finished = True
 

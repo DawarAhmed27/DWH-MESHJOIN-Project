@@ -19,7 +19,7 @@ COLUMN_MAP = {
 def clean(path):
     #IDs read as text so the MD5 rules hash the exact id
     df = pd.read_excel(path, dtype={"InvoiceNo": str, "StockCode": str})
-    #remember the row count so we can report how many rows were removed
+    #row count before cleaning, for the report
     before = len(df)
 
     #the 4 PDF cleaning rules: quantity > 0, price > 0, a known customer, no cancelled (C) invoice

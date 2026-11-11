@@ -148,7 +148,7 @@ def read_shed(conn, max_rows):
             if whole:                              #leave the cut cart for next time
                 rows = whole
     if rows:
-        #delete the rows we took, so none is processed twice
+        #delete the rows just taken, so none is processed twice
         ids = [r["shed_id"] for r in rows]
         cur.execute(f"DELETE FROM shed_table WHERE shed_id IN ({', '.join(['%s'] * len(ids))})", ids)
         conn.commit()
