@@ -104,15 +104,16 @@ ORDER BY product_category, rank_no;
 
 -- Q6. Purchase amount by city category and marital status, per month,
 -- for the latest six months: July to December 2011 (December up to the 9th).
+-- July to December is the second half of 2011, so the dim_time attribute half_year = 2 selects exactly these months.
 -- Dice: six months x city category x marital status; drill-down to month.
--- How we wrote it: Keep full_date from 1 July to 31 December 2011, GROUP BY month, city category and marital status, SUM(revenue).
+-- How we wrote it: Keep year 2011 and half_year 2 (July to December) from dim_time, GROUP BY month, city category and marital status, SUM(revenue).
 -- In one line: Monthly spending by city category and marital status over the last six months.
 SELECT t.year, t.month, c.city_category, c.marital_status,
        SUM(f.revenue) AS purchase_amount
 FROM fact_sales f
 JOIN dim_customer c ON c.customer_key = f.customer_key
 JOIN dim_time t     ON t.time_key = f.time_key
-WHERE t.full_date BETWEEN '2011-07-01' AND '2011-12-31'
+WHERE t.year = 2011 AND t.half_year = 2
 GROUP BY t.year, t.month, c.city_category, c.marital_status
 ORDER BY t.year, t.month, c.city_category, c.marital_status;
 
