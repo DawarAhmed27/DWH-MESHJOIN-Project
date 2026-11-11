@@ -43,12 +43,12 @@ while chunks or mj.queue:
 print("\nAfter: ", {k: example[k] for k in ["transaction_id", "customer_id", "gender", "age_group",
                                             "product_id", "product_name", "supplier_name"]})
 
-# checks
+#checks
 print(f"\nIn: {N:,}   Out: {len(out):,}   Out exactly once: {len({id(t) for t in out}) == N}")
 print("All customer-matched:", all(t["customer_matched"] for t in out),
       "  All product-matched:", all(t["product_matched"] for t in out))
 
-# compare with a direct lookup (only for this test)
+#compare with a direct lookup (only for this test)
 cur = conn.cursor(dictionary=True)
 cur.execute("SELECT * FROM customer_master_data")
 cust = {r["customer_id"]: r for r in cur.fetchall()}

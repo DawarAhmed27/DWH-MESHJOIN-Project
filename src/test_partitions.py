@@ -22,7 +22,7 @@ for table in db.MASTER_TABLES:
         seen.update(list(r.values())[0] for r in rows)
     print(f"  total rows read: {total:,}   distinct ids: {len(seen):,}   rows in table: {db.count(conn, table):,}")
 
-# the loop MESHJOIN uses: after the last partition, start again at 0
+#the loop MESHJOIN uses: after the last partition, start again at 0
 n = db.partition_count(conn, "customer_master_data")
 k = 0
 order = []

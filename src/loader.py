@@ -28,10 +28,11 @@ from collections import Counter
 import db
 from consolidation import consolidate
 
+#online batch: up to 1,000 rows or 0.5 seconds, whichever comes first
 BATCH_ROWS = 1000
 BATCH_SECONDS = 0.5
 
-# dimension -> (table, id column, key column); time uses time_key as both
+#dimension -> (table, id column, key column); time uses time_key as both
 DIMENSIONS = {
     "customer": ("dim_customer", "customer_id", "customer_key"),
     "product": ("dim_product", "product_id", "product_key"),
@@ -39,70 +40,79 @@ DIMENSIONS = {
     "store": ("dim_store", "store_id", "store_key"),
     "time": ("dim_time", "time_key", "time_key"),
 }
+#columns of fact_sales in insert order
 FACT_COLUMNS = ["transaction_id", "customer_key", "product_key", "supplier_key", "store_key",
                 "time_key", "quantity", "revenue", "sales_mode", "processing_mode"]
 
 
+#builds an INSERT statement with %s placeholders
 def insert_sql(table, columns):
     return f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({', '.join(['%s'] * len(columns))})"
 
 
+#thread 4: loads finished sales into the star schema
 class LoaderThread(threading.Thread):
     def __init__(self, output, stop_event, db_params, settings):
         super().__init__(name="LoaderThread", daemon=True)
         self.output = output
         self.stop_event = stop_event
         self.db_params = db_params
-        self.settings = settings                         # hour_seconds
-        self.waiting = []                                # periodic sales waiting for the hour
-        self.hourly_loads = []                           # (hour tick, rows loaded)
-        self.keys = {name: {} for name in DIMENSIONS}   # id -> surrogate key, per dimension
+        self.settings = settings                         #hour_seconds
+        self.waiting = []                                #periodic sales waiting for the hour
+        self.hourly_loads = []                           #(hour tick, rows loaded)
+        self.keys = {name: {} for name in DIMENSIONS}   #id -> surrogate key, per dimension
         self.received = 0
-        self.loaded = 0                                  # fact rows committed
+        self.loaded = 0                                  #fact rows committed
         self.stores = Counter()
-        self.by_processing_mode = Counter()              # Live / Periodic / Shed
+        self.by_processing_mode = Counter()              #Live / Periodic / Shed
         self.unmatched = 0
 
+    #main loop: online loaded every 0.5 s, periodic at each hour tick, leftovers on quit
     def run(self):
         conn = db.connect(*self.db_params)
-        conn.autocommit = False             # one commit per batch: dimensions + facts together
-        batch = []                          # online sales, loaded at once
+        conn.autocommit = False             #one commit per batch: dimensions + facts together
+        batch = []                          #online sales, loaded at once
         last_flush = time.time()
         next_hour = time.time() + self.settings.hour_seconds
         while not self.stop_event.is_set() or not self.output.empty():
             try:
+                #take the next finished sale: online to the batch, periodic to the waiting list
                 t = self.output.get(timeout=0.1)
                 self.count(t)
                 if t["sales_mode"] == "Online":
                     batch.append(t)
                 else:
-                    self.waiting.append(t)  # periodic: wait for the hour
+                    self.waiting.append(t)  #periodic: wait for the hour
             except queue.Empty:
                 pass
+            #load the online batch when it has 1,000 rows or 0.5 s has passed
             if batch and (len(batch) >= BATCH_ROWS or time.time() - last_flush >= BATCH_SECONDS):
                 self.load(conn, batch)
                 batch = []
                 last_flush = time.time()
-            if time.time() >= next_hour:    # hour tick: load the periodic sales together
+            if time.time() >= next_hour:    #hour tick: load the periodic sales together
                 self.load_waiting(conn)
                 next_hour += self.settings.hour_seconds
-        if batch:                           # quit: load what is left
+        if batch:                           #quit: load what is left
             self.load(conn, batch)
         self.load_waiting(conn)
         conn.close()
 
+    #hour tick: load all waiting periodic sales in batches of 1,000
     def load_waiting(self, conn):
         rows, self.waiting = self.waiting, []
         for i in range(0, len(rows), BATCH_ROWS):
             self.load(conn, rows[i:i + BATCH_ROWS])
         self.hourly_loads.append((len(self.hourly_loads) + 1, len(rows)))
 
+    #counters for status and the summary
     def count(self, t):
         self.received += 1
         self.stores[t["store_id"]] += 1
         self.by_processing_mode[t["processing_mode"]] += 1
         self.unmatched += not (t["customer_matched"] and t["product_matched"])
 
+    #returns the surrogate key; inserts the dimension row first if it is new
     def dimension_key(self, cur, name, row):
         """Key of this dimension value; inserts the dimension row first if it is new."""
         table, id_col, key_col = DIMENSIONS[name]
@@ -113,15 +123,16 @@ class LoaderThread(threading.Thread):
             known[value] = value if name == "time" else cur.lastrowid
         return known[value]
 
+    #one batch: dimensions first, then facts, then one commit
     def load(self, conn, transactions):
         cur = conn.cursor()
         facts = []
         for t in transactions:
             dims, fact = consolidate(t)
-            for name, row in dims.items():                       # 1. dimensions first
+            for name, row in dims.items():                       #1. dimensions first
                 fact[DIMENSIONS[name][2]] = self.dimension_key(cur, name, row)
             facts.append([fact[c] for c in FACT_COLUMNS])
-        cur.executemany(insert_sql("fact_sales", FACT_COLUMNS), facts)   # 2. then the facts
-        conn.commit()                                            # 3. both in one commit
+        cur.executemany(insert_sql("fact_sales", FACT_COLUMNS), facts)   #2. then the facts
+        conn.commit()                                            #3. both in one commit
         cur.close()
         self.loaded += len(facts)

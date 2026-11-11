@@ -14,33 +14,37 @@ from collections import deque
 
 import db
 
+#attributes copied from the master pages into each sale
 CUSTOMER_FIELDS = ["gender", "age_group", "occupation", "city_category",
                    "stay_in_current_city_years", "marital_status"]
 PRODUCT_FIELDS = ["product_name", "product_category", "supplier_id", "supplier_name"]
 
 
+#the MESHJOIN algorithm: hash table H, queue of chunks, one page of each master table per iteration
 class MeshJoin:
     def __init__(self, conn):
         self.conn = conn
-        self.n_cust = db.partition_count(conn, "customer_master_data")   # 9
-        self.n_prod = db.partition_count(conn, "product_master_data")    # 8
-        self.cycle = max(self.n_cust, self.n_prod)                       # 9
-        self.k_cust = 0               # next customer page to read
-        self.k_prod = 0               # next product page to read
-        self.H_cust = {}              # customer_id -> list of transactions in memory
-        self.H_prod = {}              # product_id  -> list of transactions in memory
-        self.queue = deque()          # [chunk, iterations seen], oldest on the left
+        self.n_cust = db.partition_count(conn, "customer_master_data")   #9
+        self.n_prod = db.partition_count(conn, "product_master_data")    #8
+        self.cycle = max(self.n_cust, self.n_prod)                       #9
+        self.k_cust = 0               #next customer page to read
+        self.k_prod = 0               #next product page to read
+        self.H_cust = {}              #customer_id -> list of transactions in memory
+        self.H_prod = {}              #product_id  -> list of transactions in memory
+        self.queue = deque()          #[chunk, iterations seen], oldest on the left
         self.iterations = 0
 
+    #how many sales are inside MESHJOIN now
     def in_memory(self):
         return sum(len(chunk) for chunk, _ in self.queue)
 
+    #one MESHJOIN iteration; returns the chunk that has finished its 9 iterations
     def iterate(self, new_chunk):
         """One MESHJOIN iteration. Returns the transactions that are finished
         (their chunk has seen a full cycle), fully enriched."""
         self.iterations += 1
 
-        # 1. new chunk enters the room: into H (both tables) and the queue
+        #1. new chunk enters the room: into H (both tables) and the queue
         if new_chunk:
             for t in new_chunk:
                 t["customer_matched"] = False
@@ -49,11 +53,11 @@ class MeshJoin:
                 self.H_prod.setdefault(t["product_id"], []).append(t)
             self.queue.append([new_chunk, 0])
 
-        # 2. take one page of each book out of the cupboard (disk buffer)
+        #2. take one page of each book out of the cupboard (disk buffer)
         cust_page = db.read_partition(self.conn, "customer_master_data", self.k_cust)
         prod_page = db.read_partition(self.conn, "product_master_data", self.k_prod)
 
-        # 3. read every name on the page out loud: look it up in H
+        #3. read every name on the page out loud: look it up in H
         matches = 0
         for row in cust_page:
             for t in self.H_cust.get(row["customer_id"], []):
@@ -64,17 +68,17 @@ class MeshJoin:
                     matches += 1
         for row in prod_page:
             for t in self.H_prod.get(row["product_id"], []):
-                if not t["product_matched"]:        # products: one page can come twice in 9 rounds
+                if not t["product_matched"]:        #products: one page can come twice in 9 rounds
                     for f in PRODUCT_FIELDS:
                         t[f] = row[f]
                     t["product_matched"] = True
                     matches += 1
 
-        # next pages, looping back to 0 after the last
+        #next pages, looping back to 0 after the last
         self.k_cust = (self.k_cust + 1) % self.n_cust
         self.k_prod = (self.k_prod + 1) % self.n_prod
 
-        # 4. every chunk has now seen one more iteration; the oldest leaves after a full cycle
+        #4. every chunk has now seen one more iteration; the oldest leaves after a full cycle
         for entry in self.queue:
             entry[1] += 1
         finished = []
@@ -83,6 +87,7 @@ class MeshJoin:
             self._remove_from_H(chunk)
             finished = chunk
 
+        #numbers of this iteration, shown in the control room
         self.last = {"iteration": self.iterations, "added": len(new_chunk or []),
                      "cust_page": (self.k_cust - 1) % self.n_cust,
                      "prod_page": (self.k_prod - 1) % self.n_prod,
@@ -90,6 +95,7 @@ class MeshJoin:
                      "in_memory": self.in_memory()}
         return finished
 
+    #remove a finished chunk from both hash tables (by object identity)
     def _remove_from_H(self, chunk):
         leaving = {id(t) for t in chunk}
         for H, key in ((self.H_cust, "customer_id"), (self.H_prod, "product_id")):
@@ -101,13 +107,13 @@ class MeshJoin:
                     del H[k]
 
 
-# ---------------------------------------------------------------------------
-# Step 7.6: store enrichment (outside MESHJOIN) and the output queue
-# ---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
+#Step 7.6: store enrichment (outside MESHJOIN) and the output queue
+#---------------------------------------------------------------------------
 
 from splitting import md5_number
 
-# Store list kept in memory (PDF 5.4.2), not a file or a disk table
+#Store list kept in memory (PDF 5.4.2), not a file or a disk table
 STORES = {
     1: ("Online", "Web"),
     2: ("London Bridge", "London"),
@@ -117,6 +123,7 @@ STORES = {
 }
 
 
+#store join outside MESHJOIN: online -> store 1, periodic -> 2 + MD5 number mod 4
 def add_store(t):
     """Online cart -> store 1. Store cart -> 2 + (MD5 number mod 4), using the
     same MD5 number as the sales_mode rule. Joined from the in-memory list."""
@@ -129,6 +136,7 @@ def add_store(t):
     return t
 
 
+#add the store to every finished sale and pass it to the loader
 def send_to_output(finished, output):
     """Finished transactions from MESHJOIN: add the store, then put them in
     the output queue, ready to be loaded into the DW (Phase 9)."""
@@ -137,9 +145,9 @@ def send_to_output(finished, output):
     return len(finished)
 
 
-# ---------------------------------------------------------------------------
-# Step 7.7: the MeshJoinThread - the room working nonstop
-# ---------------------------------------------------------------------------
+#---------------------------------------------------------------------------
+#Step 7.7: the MeshJoinThread - the room working nonstop
+#---------------------------------------------------------------------------
 
 import threading
 import time
@@ -147,6 +155,7 @@ import time
 from stream import to_transaction
 
 
+#thread 3: runs MESHJOIN nonstop on chunks from the stream buffer
 class MeshJoinThread(threading.Thread):
     """Runs MESHJOIN iterations in a loop: take a chunk (up to 500) from the
     stream buffer, iterate, send finished transactions to the output queue.
@@ -160,38 +169,42 @@ class MeshJoinThread(threading.Thread):
         self.buffer = buffer
         self.output = output
         self.stop_event = stop_event
-        self.feeders = feeders            # [OnlineThread, PeriodicThread]
-        self.settings = settings          # mode: peak / non-peak
+        self.feeders = feeders            #[OnlineThread, PeriodicThread]
+        self.settings = settings          #mode: peak / non-peak
         self.mj = None
         self.processed = 0
-        self.read_back = 0                # transactions taken back from shed_table
+        self.read_back = 0                #transactions taken back from shed_table
         self.finished = False
 
+    #true when both feeder threads have sent everything
     def feeders_done(self):
         return all(f.finished for f in self.feeders)
 
+    #true when every sale has passed through MESHJOIN
     def all_processed(self):
         """Both feeders finished, buffer empty, nothing left in the room."""
         return (self.feeders_done() and self.buffer.size() == 0
                 and self.mj is not None and not self.mj.queue)
 
     def run(self):
-        conn = db.connect(*self.db_params)   # own MySQL connection for this thread
+        conn = db.connect(*self.db_params)   #own MySQL connection for this thread
         self.mj = MeshJoin(conn)
         while not self.stop_event.is_set():
-            chunk = self.buffer.take_chunk(500)           # online first, then periodic
+            #take the next chunk from the stream buffer
+            chunk = self.buffer.take_chunk(500)           #online first, then periodic
 
-            # step 8.3: in non-peak time, fill the free places from the shed table
+            #step 8.3: in non-peak time, fill the free places from the shed table
             if self.settings.mode == "non-peak" and len(chunk) < 500:
                 back = db.read_shed(conn, 500 - len(chunk))
                 chunk += [to_transaction(r, "Shed") for r in back]
                 self.read_back += len(back)
 
+            #iterate even with an empty chunk, so the chunks inside can still leave
             if chunk or self.mj.queue:
                 self.processed += send_to_output(self.mj.iterate(chunk), self.output)
                 if not chunk:
-                    time.sleep(0.05)      # nothing new arrived: don't hammer the disk
+                    time.sleep(0.05)      #nothing new arrived: don't hammer the disk
             else:
-                time.sleep(0.05)          # room empty, waiting for the next arrivals
+                time.sleep(0.05)          #room empty, waiting for the next arrivals
         conn.close()
         self.finished = True

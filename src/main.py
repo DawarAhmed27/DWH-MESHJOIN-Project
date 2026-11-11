@@ -27,12 +27,14 @@ import stream
 import working_data
 from loader import LoaderThread
 
+#stream buffer size from the PDF
 STREAM_BUFFER_LIMIT = 1000
 
 SRC_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SRC_DIR)
 
 
+#command-line options: speeds, hour length, start mode
 def settings():
     p = argparse.ArgumentParser(description="MESHJOIN near-real-time DW")
     p.add_argument("--peak", type=int, default=80, help="transactions per second in peak time")
@@ -42,11 +44,13 @@ def settings():
     return p.parse_args()
 
 
+#asks a question; Enter keeps the default
 def ask(question, default):
     answer = input(f"{question} [{default}]: ").strip()
     return answer or default
 
 
+#finds Create-DW.sql in the sql folder
 def find_sql_file():
     for path in [os.path.join(PROJECT_DIR, "sql", "Create-DW.sql"),
                  os.path.join(PROJECT_DIR, "Create-DW.sql"),
@@ -56,6 +60,7 @@ def find_sql_file():
     sys.exit("Create-DW.sql not found (expected in the sql folder).")
 
 
+#default location of Online Retail.xlsx
 def default_data_file():
     for path in [os.path.join(PROJECT_DIR, "data", "Online Retail.xlsx"),
                  os.path.join(PROJECT_DIR, "Online Retail.xlsx")]:
@@ -64,6 +69,7 @@ def default_data_file():
     return "Online Retail.xlsx"
 
 
+#prints the settings (the PDF wants them shown before the threads start)
 def print_settings(cfg):
     print(f"Stream arrival mode:   {cfg.mode}")
     print(f"Peak speed:            {cfg.peak} transactions/second")
@@ -72,6 +78,7 @@ def print_settings(cfg):
     print(f"Stream buffer limit:   {STREAM_BUFFER_LIMIT:,} transactions")
 
 
+#program start: connect, prepare the data, then start the threads
 def main():
     cfg = settings()
     print("=" * 60)
@@ -79,7 +86,7 @@ def main():
     print("=" * 60)
     print_settings(cfg)
 
-    # 1. connection details and file path (password is never stored)
+    #1. connection details and file path (password is never stored)
     host, port, database, user = "localhost", 3306, "dwh_project", "root"
     data_file = default_data_file()
     print("\nConnection settings:")
@@ -91,14 +98,16 @@ def main():
         database = ask("Database name", database)
         user     = ask("User name", user)
         data_file = ask("Path of the transactional file", data_file)
+    #the password is typed hidden and kept only in memory
     password = getpass("MySQL password: ")
 
-    if os.path.isdir(data_file):   # a folder was given: look for the file inside it
+    if os.path.isdir(data_file):   #a folder was given: look for the file inside it
         data_file = os.path.join(data_file, "Online Retail.xlsx")
     if not os.path.exists(data_file):
         sys.exit(f"File not found: {data_file}")
     out_dir = os.path.dirname(os.path.abspath(data_file))
 
+    #connect, or stop with a clear message
     try:
         conn = db.connect(host, port, database, user, password)
     except Exception as e:
@@ -106,20 +115,20 @@ def main():
                  f"Check that MySQL is running, the port and the password.\n({e})")
     print(f"Connected to {host}:{port}/{database}")
 
-    # 2. create the working tables and the DW (drops any old copy)
+    #2. create the working tables and the DW (drops any old copy)
     db.run_sql_file(conn, find_sql_file())
     print("Tables created (old copy and view dropped first)")
 
-    # 3. clean
+    #3. clean
     t0 = time.time()
     print("\n--- Cleaning ---")
     df = cleaning.clean(data_file)
 
-    # 4. online / periodic
+    #4. online / periodic
     print("\n--- Sales mode ---")
     df = splitting.split(df)
 
-    # 5. master data: write the CSV files and load the tables
+    #5. master data: write the CSV files and load the tables
     print("\n--- Master Data ---")
     customers = master_data.build_customers(df)
     products = master_data.build_products(df)
@@ -128,7 +137,7 @@ def main():
     db.insert_rows(conn, "customer_master_data", master_data.with_partition_no(customers))
     db.insert_rows(conn, "product_master_data", master_data.with_partition_no(products))
 
-    # 6. online file and the 48 periodic groups
+    #6. online file and the 48 periodic groups
     print("\n--- Working data ---")
     online = working_data.build_online(df)
     online_file = os.path.join(out_dir, "online_sales_stream.csv")
@@ -146,13 +155,14 @@ def main():
 
     conn.close()
 
-    # settings printed again just before the threads start (PDF Section 9)
+    #settings printed again just before the threads start (PDF Section 9)
     print("\nStarting the threads")
     print_settings(cfg)
     run_threads(cfg, (host, port, database, user, password), online_file,
                 expected=len(online) + len(periodic))
 
 
+#the list of commands shown by help
 HELP = """Commands:
   online             online stream only (no periodic groups)
   periodic           periodic groups only (online stream paused)
@@ -166,6 +176,7 @@ HELP = """Commands:
   quit               stop the threads and close the program"""
 
 
+#the status command: buffer, MESHJOIN, shedding and loading numbers
 def print_status(s, buffer, mesh, online, periodic, loader, conn):
     m = mesh.mj
     print(f"Mode: {s.mode}   Source: {s.source}   "
@@ -184,25 +195,28 @@ def print_status(s, buffer, mesh, online, periodic, loader, conn):
           f"hourly loads: {len(loader.hourly_loads)} (last {loader.hourly_loads[-1][1] if loader.hourly_loads else 0:,} rows)")
 
 
+#starts the 4 threads and reads commands until quit
 def run_threads(cfg, db_params, online_file, expected):
     """Phase 7 threads + Phase 8 commands. The main thread reads commands;
     the LoaderThread takes finished transactions from `output`."""
+    #shared objects: settings, stream buffer, output queue and the stop signal
     settings = stream.Settings(cfg.peak, cfg.nonpeak, cfg.hour, cfg.mode)
     buffer = stream.StreamBuffer(STREAM_BUFFER_LIMIT)
     output = queue.Queue()
     stop = threading.Event()
 
+    #create the four threads, each with its own job
     online = stream.OnlineThread(online_file, buffer, settings, stop, db_params)
     periodic = stream.PeriodicThread(db_params, buffer, settings, stop)
     mesh = meshjoin.MeshJoinThread(db_params, buffer, output, stop, [online, periodic], settings)
     loader = LoaderThread(output, stop, db_params, settings)
     for t in (online, periodic, mesh, loader):
         t.start()
-    conn = db.connect(*db_params)            # main thread's own connection (for status)
+    conn = db.connect(*db_params)            #main thread's own connection (for status)
     start = time.time()
     print("\n" + HELP + "\n")
 
-    # tell the user once when every transaction has gone through
+    #tell the user once when every transaction has gone through
     def watch():
         while not stop.is_set():
             if mesh.all_processed() and loader.loaded == expected:
@@ -212,6 +226,7 @@ def run_threads(cfg, db_params, online_file, expected):
             time.sleep(0.5)
     threading.Thread(target=watch, daemon=True).start()
 
+    #command loop: each command changes the shared settings
     while True:
         try:
             words = input("> ").strip().lower().split()
@@ -242,12 +257,12 @@ def run_threads(cfg, db_params, online_file, expected):
         else:
             print("Unknown command. Type help for the list.")
 
-    # quit: stop all threads, then print the summary
+    #quit: stop all threads, then print the summary
     print("Stopping the threads ...")
     stop.set()
     for t in (online, periodic, mesh):
         t.join(timeout=5)
-    loader.join()                            # loads what is left in the output queue
+    loader.join()                            #loads what is left in the output queue
     conn.close()
     print(f"Ran for {time.time() - start:.0f} s")
     print(f"Transactions out of MESHJOIN: {loader.received:,} (expected {expected:,})")

@@ -281,6 +281,10 @@ details summary::-webkit-details-marker { display: none; }
 details summary::before { content: "+"; width: 12px; color: var(--ink-3); }
 details[open] summary::before { content: "\2212"; }
 .notes { color: var(--ink-2); margin-top: var(--s2); max-width: 90ch; }
+.q-explain { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 6px 14px; margin: var(--s3) 0 0; padding: var(--s3) var(--s4); background: var(--accent-tint); border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0; max-width: 100ch; }
+.q-explain[hidden] { display: none; }
+.q-explain dt { font-size: var(--t-xs); font-weight: 600; color: var(--accent); padding-top: 2px; }
+.q-explain dd { margin: 0; font-size: var(--t-sm); color: var(--ink); line-height: 1.5; }
 .sql { font-family: var(--mono); font-size: 12px; white-space: pre; overflow: auto; max-height: 300px; padding: var(--s3) var(--s4); background: var(--sunk); border-radius: var(--r); margin-top: var(--s2); color: #2B3640; }
 .sql .kw { color: var(--accent); font-weight: 600; }
 .sql .fn { color: #8F5A10; }

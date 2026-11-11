@@ -16,7 +16,7 @@ from stream import PeriodicThread, Settings, StreamBuffer
 
 params = ("localhost", 3306, "dwh_project", "root", getpass("MySQL password: "))
 
-# start clean: no group released yet
+#start clean: no group released yet
 conn = db.connect(*params)
 cur = conn.cursor()
 cur.execute("UPDATE periodic_sales_data SET released = 0")
@@ -30,7 +30,7 @@ periodic.start()
 
 taken = []
 start = time.time()
-while time.time() - start < 7.5:          # simulated MESHJOIN: take chunks
+while time.time() - start < 7.5:          #simulated MESHJOIN: take chunks
     taken.extend(buffer.take_chunk(500))
     time.sleep(0.1)
 stop.set()
@@ -46,6 +46,6 @@ cur.execute("SELECT release_hour, COUNT(*) FROM periodic_sales_data "
             "WHERE released = 1 GROUP BY release_hour ORDER BY release_hour")
 print("Released in MySQL:", cur.fetchall())
 
-cur.execute("UPDATE periodic_sales_data SET released = 0")   # reset for the real run
+cur.execute("UPDATE periodic_sales_data SET released = 0")   #reset for the real run
 conn.commit()
 conn.close()

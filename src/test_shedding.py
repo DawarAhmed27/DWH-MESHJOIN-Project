@@ -25,7 +25,7 @@ SECONDS = 15
 db_params = ("localhost", 3306, "dwh_project", "root", getpass("MySQL password: "))
 conn = db.connect(*db_params)
 cur = conn.cursor()
-cur.execute("UPDATE periodic_sales_data SET released = 0")   # start again from group 0
+cur.execute("UPDATE periodic_sales_data SET released = 0")   #start again from group 0
 cur.execute("DELETE FROM shed_table")
 conn.commit()
 
@@ -38,7 +38,7 @@ periodic = stream.PeriodicThread(db_params, buffer, settings, stop)
 online.start()
 periodic.start()
 
-# slow consumer instead of MESHJOIN
+#slow consumer instead of MESHJOIN
 taken = {"Live": 0, "Periodic": 0}
 start = time.time()
 print(" time | buffer | taken | shed online | shed periodic (arriving + taken out)")
@@ -53,7 +53,7 @@ while time.time() - start < SECONDS:
 stop.set()
 online.join()
 periodic.join()
-for t in buffer.take_chunk(1000):          # what is still in the buffer
+for t in buffer.take_chunk(1000):          #what is still in the buffer
     taken[t["processing_mode"]] += 1
 
 cur.execute("SELECT sales_mode, COUNT(*) FROM shed_table GROUP BY sales_mode")
@@ -67,7 +67,7 @@ print("Nothing lost:", online.sent == taken["Live"] and released == taken["Perio
 print(f"Shed table: {in_shed}   matches the counters:",
       in_shed.get("Online", 0) == online.shed_online and in_shed.get("Periodic", 0) == shed_periodic)
 
-# a periodic cart is shed whole: its shed row count equals its row count in the staging table
+#a periodic cart is shed whole: its shed row count equals its row count in the staging table
 cur.execute("""SELECT COUNT(*) FROM
                  (SELECT transaction_id, COUNT(*) n FROM shed_table
                   WHERE sales_mode = 'Periodic' GROUP BY transaction_id) s

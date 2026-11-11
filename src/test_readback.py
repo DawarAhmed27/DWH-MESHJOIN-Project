@@ -24,7 +24,7 @@ shed_before = db.count(conn, "shed_table")
 print(f"On shed disk at the start: {shed_before:,}")
 
 
-class Done:                      # stands in for the two feeding threads (already finished)
+class Done:                      #stands in for the two feeding threads (already finished)
     finished = True
 
 

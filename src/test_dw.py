@@ -26,7 +26,7 @@ def one(sql):
     return cur.fetchone()[0]
 
 
-# expected, from the working data
+#expected, from the working data
 rows, revenue, customers, products, minutes = 0, Decimal(0), set(), set(), set()
 with open(os.path.join(PROJECT_DIR, "online_sales_stream.csv"), newline="", encoding="utf-8") as f:
     for r in csv.DictReader(f):

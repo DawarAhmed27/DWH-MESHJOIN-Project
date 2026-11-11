@@ -27,19 +27,20 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(APP_DIR)
 sys.path.insert(0, os.path.join(PROJECT_DIR, "src"))
 
-import cleaning          # noqa: E402
-import db                # noqa: E402
-import master_data       # noqa: E402
-import meshjoin          # noqa: E402
-import splitting         # noqa: E402
-import stream            # noqa: E402
-import working_data      # noqa: E402
-from loader import LoaderThread  # noqa: E402
-import main as cli        # noqa: E402  (HELP and print_status, same text as the terminal)
+import cleaning          #noqa: E402
+import db                #noqa: E402
+import master_data       #noqa: E402
+import meshjoin          #noqa: E402
+import splitting         #noqa: E402
+import stream            #noqa: E402
+import working_data      #noqa: E402
+from loader import LoaderThread  #noqa: E402
+import main as cli        #noqa: E402  (HELP and print_status, same text as the terminal)
 
 app = Flask(__name__, static_folder=os.path.join(APP_DIR, "static"), static_url_path="/static")
 
 
+#default location of Online Retail.xlsx
 def default_data_file():
     for path in [os.path.join(PROJECT_DIR, "data", "Online Retail.xlsx"),
                  os.path.join(PROJECT_DIR, "Online Retail.xlsx")]:
@@ -48,6 +49,7 @@ def default_data_file():
     return os.path.join(PROJECT_DIR, "Online Retail.xlsx")
 
 
+#turns MySQL values (Decimal, dates) into plain JSON values
 def plain(v):
     """Database values -> JSON-friendly values."""
     if isinstance(v, Decimal):
@@ -59,15 +61,16 @@ def plain(v):
     return v
 
 
+#the control room's engine: same modules and threads as main.py
 class Engine:
     """Everything the page can see and do: connection, settings,
     preparation, the threads and the commands."""
 
     def __init__(self):
-        self.conn_params = None                    # (host, port, database, user, password)
+        self.conn_params = None                    #(host, port, database, user, password)
         self.data_file = default_data_file()
         self.settings = stream.Settings(80, 10, 60, "peak")
-        self.log = []                              # (time, kind, text)
+        self.log = []                              #(time, kind, text)
         self.prep = {"state": "idle", "step": None, "steps": {}, "error": None}
         self.expected = 0
         self.online_file = None
@@ -76,17 +79,17 @@ class Engine:
         self.started_at = None
         self.lock = threading.Lock()
 
-    # ---------- log ----------
+    #---------- log ----------
     def say(self, text, kind="info"):
         with self.lock:
             self.log.append((time.time(), kind, text))
             del self.log[:-1500]
 
-    # ---------- connection ----------
+    #---------- connection ----------
     def connect(self):
         return db.connect(*self.conn_params)
 
-    # ---------- preparation (PDF Section 9, steps 1 and 2) ----------
+    #---------- preparation (PDF Section 9, steps 1 and 2) ----------
     def prepare(self):
         steps = self.prep["steps"]
 
@@ -136,13 +139,13 @@ class Engine:
             conn.close()
             self.prep.update(state="done", step=None)
             self.say(f"Data prepared: {self.expected:,} transactions ready", "ok")
-        except Exception as e:                      # shown in the page
+        except Exception as e:                      #shown in the page
             self.prep.update(state="error", error=str(e))
             if self.prep["step"]:
                 steps[self.prep["step"]]["state"] = "error"
             self.say(f"Preparation failed: {e}", "error")
 
-    # ---------- threads (PDF Section 9, steps 3 to 5) ----------
+    #---------- threads (PDF Section 9, steps 3 to 5) ----------
     def start(self):
         s = self.settings
         buffer = stream.StreamBuffer(1000)
@@ -162,6 +165,7 @@ class Engine:
         for line in self.settings_lines():
             self.say(line, "out")
 
+    #the settings, printed like the terminal program
     def settings_lines(self):
         s = self.settings
         return [f"Stream arrival mode:   {s.mode}",
@@ -170,6 +174,7 @@ class Engine:
                 f"One simulated hour:    {s.hour_seconds} seconds",
                 f"Stream buffer limit:   {cli.STREAM_BUFFER_LIMIT:,} transactions"]
 
+    #one command typed in the Console page; same answers as main.py
     def console(self, line):
         """One line typed in the Console page: the same commands and the same
         answers as the terminal program (src/main.py)."""
@@ -222,6 +227,7 @@ class Engine:
         for l in out:
             self.say(l, kind)
 
+    #quit: stop the threads and print the summary
     def stop(self):
         t = self.threads
         t["stop"].set()
@@ -231,6 +237,7 @@ class Engine:
         self.running = False
         self.say(f"Stopped. Loaded into the DW: {t['loader'].loaded:,} fact rows", "ok")
 
+    #live numbers for the Live page, polled by the browser
     def status(self):
         s = self.settings
         out = {"settings": {"peak": s.peak_tps, "nonpeak": s.nonpeak_tps, "hour": s.hour_seconds,
@@ -248,7 +255,7 @@ class Engine:
         if mj:
             try:
                 chunks = [{"size": len(c), "age": a} for c, a in list(mj.queue)]
-            except RuntimeError:            # queue changed while copying; next poll will show it
+            except RuntimeError:            #queue changed while copying; next poll will show it
                 chunks = []
         on, pe, lo = t["online"], t["periodic"], t["loader"]
         with t["buffer"].lock:
@@ -289,24 +296,26 @@ class Engine:
 E = Engine()
 
 
+#answers with an error if Setup has not connected yet
 def need_connection():
     if not E.conn_params:
         return jsonify(error="Connect to MySQL first (Setup)."), 400
     return None
 
 
-# ---------------- pages ----------------
+#---------------- pages ----------------
 @app.get("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+#serves the report files
 @app.get("/report/<path:name>")
 def report_file(name):
     return send_from_directory(os.path.join(PROJECT_DIR, "report"), name)
 
 
-# ---------------- setup ----------------
+#---------------- setup ----------------
 @app.post("/api/connect")
 def api_connect():
     d = request.get_json()
@@ -328,6 +337,7 @@ def api_connect():
     return jsonify(ok=True, version=version, data_file=E.data_file, file_exists=os.path.exists(E.data_file))
 
 
+#Setup: speeds, hour length and mode
 @app.post("/api/settings")
 def api_settings():
     d = request.get_json()
@@ -341,6 +351,7 @@ def api_settings():
     return jsonify(ok=True)
 
 
+#Setup: run the preparation in the background
 @app.post("/api/prepare")
 def api_prepare():
     if (r := need_connection()):
@@ -355,7 +366,7 @@ def api_prepare():
     return jsonify(ok=True)
 
 
-# ---------------- run ----------------
+#---------------- run ----------------
 @app.post("/api/start")
 def api_start():
     if (r := need_connection()):
@@ -368,6 +379,7 @@ def api_start():
     return jsonify(ok=True)
 
 
+#Live run buttons: the same commands as the terminal
 @app.post("/api/command")
 def api_command():
     d = request.get_json()
@@ -394,12 +406,14 @@ def api_command():
     return jsonify(ok=True)
 
 
+#Console page: run one typed command
 @app.post("/api/console")
 def api_console():
     E.console((request.get_json() or {}).get("line", ""))
     return jsonify(ok=True)
 
 
+#Console page: the full log
 @app.get("/api/log")
 def api_log():
     with E.lock:
@@ -407,12 +421,13 @@ def api_log():
     return jsonify([{"t": round(t, 2), "kind": k, "text": x} for t, k, x in log])
 
 
+#Live page: current numbers
 @app.get("/api/status")
 def api_status():
     return jsonify(E.status())
 
 
-# ---------------- DW ----------------
+#---------------- DW ----------------
 @app.get("/api/schema")
 def api_schema():
     if (r := need_connection()):
@@ -436,6 +451,7 @@ def api_schema():
     return jsonify(tables=tables, counts=counts)
 
 
+#Overview page: totals, months, stores and modes
 @app.get("/api/overview")
 def api_overview():
     if (r := need_connection()):
@@ -464,6 +480,7 @@ def api_overview():
     return jsonify(out)
 
 
+#reads Queries-DW.sql: each query with its title and comment lines
 def read_queries():
     """Statements of sql/Queries-DW.sql. Each gets the title comment above it
     ("-- Q1. ...", "-- Check ...", "-- Materialized ...") and its other comment lines."""
@@ -488,11 +505,13 @@ def read_queries():
     return items
 
 
+#Analysis page: the list of queries
 @app.get("/api/queries")
 def api_queries():
     return jsonify(read_queries())
 
 
+#Analysis page: run one query and time it
 @app.post("/api/query")
 def api_query():
     if (r := need_connection()):
@@ -518,6 +537,7 @@ def api_query():
                    total=len(rows), seconds=secs)
 
 
+#Checks page: compare the DW with the working data
 @app.get("/api/checks")
 def api_checks():
     """The checks of test_dw.py: expected values from the working data."""

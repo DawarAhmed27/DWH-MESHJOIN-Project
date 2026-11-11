@@ -3,6 +3,7 @@
 -- star schema (5 dimensions + 1 fact). 
 SET NAMES utf8mb4;
 
+-- Drop the old copy first: the view and the materialized table, then the fact (it points to the dimensions), then the rest
 DROP VIEW  IF EXISTS STORE_QUARTERLY_SALES;
 DROP TABLE IF EXISTS MV_STORE_QUARTERLY_SALES;
 
@@ -87,6 +88,7 @@ CREATE TABLE shed_table (
 -- STAR SCHEMA
 -- Surrogate keys for the dimensions; original ids are kept as columns.
 
+-- Customer dimension: surrogate key + customer_id + the 6 attributes from the Master Data
 CREATE TABLE dim_customer (
     customer_key                INT          NOT NULL AUTO_INCREMENT,
     customer_id                 VARCHAR(10)  NOT NULL,
@@ -100,6 +102,7 @@ CREATE TABLE dim_customer (
     UNIQUE KEY uq_customer_id (customer_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+-- Product dimension: surrogate key + product_id, name and category
 CREATE TABLE dim_product (
     product_key       INT           NOT NULL AUTO_INCREMENT,
     product_id        VARCHAR(20)   NOT NULL,
@@ -109,6 +112,7 @@ CREATE TABLE dim_product (
     UNIQUE KEY uq_product_id (product_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+-- Supplier dimension: its own table, because queries group by supplier
 CREATE TABLE dim_supplier (
     supplier_key   INT          NOT NULL AUTO_INCREMENT,
     supplier_id    CHAR(5)      NOT NULL,
@@ -117,6 +121,7 @@ CREATE TABLE dim_supplier (
     UNIQUE KEY uq_supplier_id (supplier_id)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
+-- Store dimension: the 5 stores (1 = Online)
 CREATE TABLE dim_store (
     store_key   INT          NOT NULL AUTO_INCREMENT,
     store_id    TINYINT      NOT NULL,

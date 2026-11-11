@@ -42,7 +42,7 @@ for name, row in dims.items():
 print(f"\nfact_sales: {fact}")
 print(f"revenue = {t['quantity']} x {t['unit_price']} = {fact['revenue']}")
 
-# time rules at their edges
+#time rules at their edges
 print("\n event_time           | key          | Q | half | day       | type    | season")
 cases = [
     ("2010-12-01 08:26:00", 4, 2, "Wednesday", "Weekday", "Winter"),
