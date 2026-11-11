@@ -42,11 +42,8 @@ app = Flask(__name__, static_folder=os.path.join(APP_DIR, "static"), static_url_
 
 #default location of Online Retail.xlsx
 def default_data_file():
-    for path in [os.path.join(PROJECT_DIR, "data", "Online Retail.xlsx"),
-                 os.path.join(PROJECT_DIR, "Online Retail.xlsx")]:
-        if os.path.exists(path):
-            return path
-    return os.path.join(PROJECT_DIR, "Online Retail.xlsx")
+    return db.find_file(PROJECT_DIR, "Online Retail.xlsx", "data", ".", "../Data") \
+        or os.path.join(PROJECT_DIR, "Online Retail.xlsx")
 
 
 #turns MySQL values (Decimal, dates) into plain JSON values
@@ -110,7 +107,7 @@ class Engine:
             steps.clear()
             conn = self.connect()
             out_dir = os.path.dirname(os.path.abspath(self.data_file))
-            step("schema", lambda: (db.run_sql_file(conn, os.path.join(PROJECT_DIR, "sql", "Create-DW.sql")),
+            step("schema", lambda: (db.run_sql_file(conn, db.find_file(PROJECT_DIR, "Create-DW.sql", "sql", "../Create-DW")),
                                     print("Create-DW.sql: old view and tables dropped, all tables created")))
             df = step("clean", lambda: cleaning.clean(self.data_file))
             df = step("split", lambda: splitting.split(df))
@@ -312,7 +309,9 @@ def index():
 #serves the report files
 @app.get("/report/<path:name>")
 def report_file(name):
-    return send_from_directory(os.path.join(PROJECT_DIR, "report"), name)
+    folder = os.path.dirname(db.find_file(PROJECT_DIR, name, "report", "../Project-Report") or
+                             os.path.join(PROJECT_DIR, "report", name))
+    return send_from_directory(folder, os.path.basename(name))
 
 
 #---------------- setup ----------------
@@ -484,7 +483,7 @@ def api_overview():
 def read_queries():
     """Statements of sql/Queries-DW.sql. Each gets the title comment above it
     ("-- Q1. ...", "-- Check ...", "-- Materialized ...") and its other comment lines."""
-    with open(os.path.join(PROJECT_DIR, "sql", "Queries-DW.sql"), encoding="utf-8") as f:
+    with open(db.find_file(PROJECT_DIR, "Queries-DW.sql", "sql", "../Queries-DW"), encoding="utf-8") as f:
         text = f.read()
     items, lines, title, notes = [], [], "", []
     for line in text.splitlines():

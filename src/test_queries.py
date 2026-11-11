@@ -13,7 +13,7 @@ import db
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SHOW = 5
 
-with open(os.path.join(PROJECT_DIR, "sql", "Queries-DW.sql"), encoding="utf-8") as f:
+with open(db.find_file(PROJECT_DIR, "Queries-DW.sql", "sql", "../Queries-DW"), encoding="utf-8") as f:
     text = f.read()
 
 #split into statements; the "-- Qn." comment line above each one is its title

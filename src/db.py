@@ -1,11 +1,21 @@
 """MySQL helpers: connect, run the Create-DW script, insert rows in batches."""
 
+import os
 from datetime import datetime
 
 import mysql.connector
 
 #rows per insert batch
 BATCH_SIZE = 5000
+
+
+#finds a project file in the GitHub layout (sql/, report/) or in the submission zip (../Create-DW, ../Queries-DW, ...)
+def find_file(project_dir, name, *folders):
+    for folder in folders:
+        path = os.path.normpath(os.path.join(project_dir, folder, name))
+        if os.path.exists(path):
+            return path
+    return None
 
 
 #opens a MySQL connection, creates the database if needed and selects it

@@ -52,21 +52,15 @@ def ask(question, default):
 
 #finds Create-DW.sql in the sql folder
 def find_sql_file():
-    for path in [os.path.join(PROJECT_DIR, "sql", "Create-DW.sql"),
-                 os.path.join(PROJECT_DIR, "Create-DW.sql"),
-                 os.path.join(SRC_DIR, "Create-DW.sql")]:
-        if os.path.exists(path):
-            return path
-    sys.exit("Create-DW.sql not found (expected in the sql folder).")
+    path = db.find_file(PROJECT_DIR, "Create-DW.sql", "sql", "../Create-DW", ".", "src")
+    if path:
+        return path
+    sys.exit("Create-DW.sql not found (expected in sql/ or ../Create-DW/).")
 
 
 #default location of Online Retail.xlsx
 def default_data_file():
-    for path in [os.path.join(PROJECT_DIR, "data", "Online Retail.xlsx"),
-                 os.path.join(PROJECT_DIR, "Online Retail.xlsx")]:
-        if os.path.exists(path):
-            return path
-    return "Online Retail.xlsx"
+    return db.find_file(PROJECT_DIR, "Online Retail.xlsx", "data", ".", "../Data") or "Online Retail.xlsx"
 
 
 #prints the settings (the PDF wants them shown before the threads start)

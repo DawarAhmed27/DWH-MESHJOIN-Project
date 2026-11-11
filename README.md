@@ -7,6 +7,21 @@ transactional data (online stream and hourly periodic groups), joins them with M
 threads (with load shedding and live commands) and loads the result into a MySQL star schema.
 `Queries-DW.sql` then analyses the DW.
 
+## Folders in the submission
+
+| Folder | Contents |
+|---|---|
+| `Create-DW/` | `Create-DW.sql`: removes any pre-existing schema and creates the star schema |
+| `Mesh-Join/` | the Python project (`src/`), the optional web control room (`app/`), `requirements.txt` and `Start Control Room.bat` |
+| `Queries-DW/` | `Queries-DW.sql`: the 20 OLAP queries, the view and the materialized view |
+| `Data/` | `online_sales_stream.csv`, `customer_master_data.csv`, `product_master_data.csv` and `Data_Note.txt` |
+| `Project-Report/` | the report (Word and PDF) and its figures |
+| `ReadMe/` | this file |
+
+Run every command below from the `Mesh-Join` folder. The program finds `Create-DW.sql` and
+`Queries-DW.sql` in the folders next to it. (In the GitHub repository the same files are in `sql/`,
+`src/`, `app/` and `report/`, and the commands are run from the repository folder.)
+
 ## Dataset
 
 Chen, D., Sain, S. L., and Guo, K. Online Retail. UCI Machine Learning Repository.
@@ -22,29 +37,26 @@ Downloaded on **3 November 2026** (file `Online Retail.xlsx`, 541,909 rows).
   ```
   pip install -r requirements.txt
   ```
-  (pandas, openpyxl, mysql-connector-python)
-- `Online Retail.xlsx` in the project folder (or in `data/`).
+  (pandas, openpyxl, mysql-connector-python, and flask for the optional control room)
+- `Online Retail.xlsx`, downloaded from the link above. It is not in the zip because of its size:
+  put it in the `Data` folder, or type its path when the program asks for it.
 
-## Files
+## Files of the Python project
 
-| Path | Contents |
+| Path (inside `Mesh-Join`) | Contents |
 |---|---|
-| `sql/Create-DW.sql` | Drops any old copy (view, materialized-view table, all tables) and creates the working tables and the star schema |
 | `src/main.py` | Program to start |
 | `src/cleaning.py`, `splitting.py`, `master_data.py`, `working_data.py` | Cleaning, sales_mode rule, Master Data, online file and 48 periodic groups |
 | `src/stream.py`, `meshjoin.py` | Stream buffer, OnlineThread, PeriodicThread, MESHJOIN, MeshJoinThread, load shedding |
 | `src/consolidation.py`, `loader.py` | Revenue and dimension rows; LoaderThread that loads the DW |
 | `src/db.py` | MySQL helpers |
 | `src/test_*.py` | Check scripts (see "Checks" below) |
-| `sql/Queries-DW.sql` | The 20 OLAP queries, the view and the materialized view |
-| `notebooks/` | The same preparation steps as notebooks |
-| `report/` | Project report (Word and PDF) and figures |
-| `docs/decisions.md` | All design decisions and test results |
+| `app/` | Optional web control room (see the end of this file) |
 
 ## 1. Create the database
 
 Nothing has to be done by hand. When the program starts it connects to MySQL, creates the
-database `dwh_project` if it does not exist, and runs `sql/Create-DW.sql`, which removes any
+database `dwh_project` if it does not exist, and runs `Create-DW.sql`, which removes any
 pre-existing schema and creates all tables.
 
 To create it by hand instead (for example in MySQL Workbench):
@@ -52,7 +64,7 @@ To create it by hand instead (for example in MySQL Workbench):
 ```sql
 CREATE DATABASE IF NOT EXISTS dwh_project;
 USE dwh_project;
--- then run sql/Create-DW.sql
+-- then run Create-DW/Create-DW.sql
 ```
 
 ## 2. Prepare the data
@@ -68,11 +80,12 @@ This is also done by the program at startup, in this order:
 4. Write `online_sales_stream.csv` and load the periodic sales into `periodic_sales_data` in 48 hourly
    groups (whole carts, 2,263 to 2,710 rows each).
 
-The CSV files are written next to `Online Retail.xlsx`. Preparation takes about 30 seconds.
+The CSV files are written next to `Online Retail.xlsx` (so into `Data/` when the file is there).
+Preparation takes about 30 seconds and prints how long the staging table took to fill.
 
 ## 3. Start the program
 
-From the project folder:
+From the `Mesh-Join` folder:
 
 ```
 python src/main.py
@@ -130,9 +143,10 @@ Periodic results are loaded once every simulated hour, after they have been join
 
 ## 5. Run the queries
 
-1. Open `sql/Queries-DW.sql` in MySQL Workbench.
+1. Open `Queries-DW/Queries-DW.sql` in MySQL Workbench.
 2. Double-click `dwh_project` in the Schemas list so it is the default schema.
-3. Run the whole script, or select one query and run it. Each query starts with a comment `-- Qn.`.
+3. Run the whole script, or select one query and run it. Each query starts with a comment `-- Qn.`,
+   and its last two comment lines say what it shows and how it works.
 
 The loaded dates are 1 December 2010 to 9 December 2011, so "the loaded year" is 2011 and "the latest
 six months" are July to December 2011; the script names these dates in a comment and its first query
@@ -154,15 +168,18 @@ The same program can be run and presented from the browser:
 python app/server.py
 ```
 
-The browser opens http://localhost:5000. The pages follow the project:
+On Windows, double-clicking `Start Control Room.bat` does the same (it installs the packages the first
+time). The browser opens http://localhost:5000. The pages follow the project:
 
 | Page | What it does |
 |---|---|
 | Overview | line map of the pipeline, KPIs and charts of the loaded DW |
 | Setup | connection (password kept in memory only), settings with presets, data preparation step by step |
+| How it works | step-through models of the threads and stream buffer, the lock, keeping the speed, MESHJOIN and loading the DW |
 | Live run | start the threads; source, mode and speed commands; live stream buffer, MESHJOIN partitions and queue, shed table, loader and event log |
+| Console | the terminal program's commands (status, peak, non-peak, ...) with the same answers |
 | Data warehouse | schema diagram and live row counts of every table |
-| Analysis | every statement of `Queries-DW.sql` with its SQL, result table, chart and time |
+| Analysis | every statement of `Queries-DW.sql` with its explanation, SQL, result table, chart and time |
 | Checks | the checks of `test_dw.py` |
 
 "Presenter mode" opens step-by-step demo notes (what to show, what to say) with buttons that run each step;
@@ -170,7 +187,7 @@ the arrow keys move between steps. The command-line program (`src/main.py`) is u
 
 ## Checks
 
-Run from the project folder after `main.py` (each asks for the MySQL password):
+Run from the `Mesh-Join` folder after `main.py` (each asks for the MySQL password):
 
 | Script | Checks |
 |---|---|
