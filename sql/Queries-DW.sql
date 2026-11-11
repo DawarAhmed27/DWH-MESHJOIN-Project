@@ -10,8 +10,8 @@
 -- Growth / volatility = (this period - previous period) / previous period x 100.
 
 -- Check the loaded dates named above
--- How I wrote it: MIN and MAX of event_time and COUNT(DISTINCT year, month), over the facts joined to dim_time.
 -- Shows the first and last sale and how many months are loaded, to pick "the loaded year".
+-- Takes the first and last sale time and counts the distinct months in the fact table.
 SELECT MIN(t.event_time) AS first_sale, MAX(t.event_time) AS last_sale,
        COUNT(DISTINCT t.year, t.month) AS months_loaded
 FROM fact_sales f
@@ -20,8 +20,8 @@ JOIN dim_time t ON t.time_key = f.time_key;
 
 -- Q1. Top 5 products by revenue on weekdays and on weekends (2011),
 -- then drill down to each month. Slice: year 2011; drill-down: year -> month.
--- How I wrote it: A CTE ranks products per day type over 2011 with ROW_NUMBER (ties by product id); the outer query keeps rank <= 5 and joins the facts again to sum each one per month.
--- Top 5 products of 2011 for weekdays and for weekends, each split into its monthly revenue.
+-- The best-selling products of 2011 on weekdays and on weekends, month by month.
+-- Ranks products by 2011 revenue separately for weekdays and weekends, keeps the top 5 of each, then splits their revenue by month.
 WITH yearly AS (
     SELECT t.day_type, p.product_key, p.product_id, p.product_name,
            SUM(f.revenue) AS year_revenue,
@@ -46,8 +46,8 @@ ORDER BY y.day_type, y.rank_no, t.month;
 
 -- Q2. Total purchase amount by gender and age group, detailed by city category.
 -- Dice: gender x age group x city category.
--- How I wrote it: Join the facts to dim_customer, GROUP BY gender, age group and city category, SUM(revenue).
 -- How much each gender and age group spends, in each city category.
+-- Joins sales to customers and sums revenue by gender, age group and city category.
 SELECT c.gender, c.age_group, c.city_category, SUM(f.revenue) AS purchase_amount
 FROM fact_sales f
 JOIN dim_customer c ON c.customer_key = f.customer_key
@@ -56,8 +56,8 @@ ORDER BY c.gender, c.age_group, c.city_category;
 
 
 -- Q3. Total sales of each product category by customer occupation.
--- How I wrote it: Join the facts to dim_product and dim_customer, GROUP BY category and occupation, SUM(revenue), biggest first inside each category.
 -- Which occupations buy the most of each product category.
+-- Joins sales to products and customers and sums revenue by category and occupation.
 SELECT p.product_category, c.occupation, SUM(f.revenue) AS total_sales
 FROM fact_sales f
 JOIN dim_product p  ON p.product_key = f.product_key
@@ -68,8 +68,8 @@ ORDER BY p.product_category, total_sales DESC;
 
 -- Q4. Purchase amount by gender and age group, per quarter of 2011.
 -- Slice: year 2011; drill-down: year -> quarter.
--- How I wrote it: Keep 2011, GROUP BY gender and age group, and turn the quarters into columns with SUM(CASE WHEN quarter = n ...).
 -- Spending of each gender and age group in each quarter of 2011.
+-- Keeps 2011 and sums revenue by gender and age group, with one column per quarter.
 SELECT c.gender, c.age_group,
        SUM(CASE WHEN t.quarter = 1 THEN f.revenue ELSE 0 END) AS q1_2011,
        SUM(CASE WHEN t.quarter = 2 THEN f.revenue ELSE 0 END) AS q2_2011,
@@ -85,8 +85,8 @@ ORDER BY c.gender, c.age_group;
 
 
 -- Q5. Top 5 occupations by sales within each product category.
--- How I wrote it: A CTE sums revenue per category and occupation and ranks the occupations inside each category with ROW_NUMBER; the outer query keeps rank <= 5.
 -- The 5 occupations that spend the most in each product category.
+-- Sums revenue per category and occupation, ranks the occupations inside each category and keeps the top 5.
 WITH ranked AS (
     SELECT p.product_category, c.occupation, SUM(f.revenue) AS total_sales,
            ROW_NUMBER() OVER (PARTITION BY p.product_category
@@ -105,8 +105,8 @@ ORDER BY product_category, rank_no;
 -- Q6. Purchase amount by city category and marital status, per month,
 -- for the latest six months: July to December 2011 (December up to the 9th).
 -- Dice: six months x city category x marital status; drill-down to month.
--- How I wrote it: half_year = 2 of 2011 (July to December), GROUP BY month, city category and marital status, SUM(revenue).
 -- Monthly spending by city category and marital status over the last six months.
+-- Keeps July to December 2011 (half_year = 2) and sums revenue by month, city category and marital status.
 SELECT t.year, t.month, c.city_category, c.marital_status,
        SUM(f.revenue) AS purchase_amount
 FROM fact_sales f
@@ -119,8 +119,8 @@ ORDER BY t.year, t.month, c.city_category, c.marital_status;
 
 -- Q7. Average purchase amount (average revenue per transaction) by years
 -- stayed in the current city and gender.
--- How I wrote it: AVG(revenue) of the fact rows grouped by years in the city and gender; CAST sorts the years as numbers (4+ last).
 -- Average purchase per transaction line for each years-in-city and gender group.
+-- Averages revenue per sale by years in the city and gender; CAST sorts the years as numbers.
 SELECT c.stay_in_current_city_years, c.gender,
        ROUND(AVG(f.revenue), 2) AS avg_purchase_amount,
        COUNT(*) AS transactions
@@ -131,8 +131,8 @@ ORDER BY CAST(c.stay_in_current_city_years AS UNSIGNED), c.gender;
 
 
 -- Q8. City categories (A, B, C) ranked by revenue inside each product category.
--- How I wrote it: Sum revenue per product category and city category, then RANK() inside each product category by revenue.
 -- Ranks cities A, B and C by revenue inside every product category.
+-- Sums revenue per product category and city category and ranks the cities inside each category.
 SELECT p.product_category, c.city_category, SUM(f.revenue) AS revenue,
        RANK() OVER (PARTITION BY p.product_category ORDER BY SUM(f.revenue) DESC) AS city_rank
 FROM fact_sales f
@@ -145,8 +145,8 @@ ORDER BY p.product_category, city_rank;
 -- Q9. Month-over-month sales growth (%) for each product category in 2011.
 -- January has no previous month in 2011, so its growth is NULL.
 -- December 2011 holds only 1 to 9 December, so its drop is expected.
--- How I wrote it: A CTE sums 2011 revenue per category and month; LAG gives the previous month; growth = (this - previous) / previous x 100.
 -- Month-to-month sales growth % of each product category in 2011.
+-- Sums 2011 revenue per category and month; LAG brings the previous month to work out the growth %.
 WITH monthly AS (
     SELECT p.product_category, t.month, SUM(f.revenue) AS sales
     FROM fact_sales f
@@ -164,8 +164,8 @@ ORDER BY product_category, month;
 
 
 -- Q10. Weekend vs weekday sales by age group in 2011. Slice: year 2011.
--- How I wrote it: Keep 2011, GROUP BY age group, and two SUM(CASE WHEN day_type ...) columns split weekday and weekend revenue.
 -- Weekday vs weekend spending of each age group in 2011.
+-- Keeps 2011 and sums revenue by age group, with separate weekday and weekend columns.
 SELECT c.age_group,
        SUM(CASE WHEN t.day_type = 'Weekday' THEN f.revenue ELSE 0 END) AS weekday_sales,
        SUM(CASE WHEN t.day_type = 'Weekend' THEN f.revenue ELSE 0 END) AS weekend_sales,
@@ -180,8 +180,8 @@ ORDER BY c.age_group;
 
 -- Q11. Top 5 products by revenue within each month of 2011, separately for
 -- weekdays and weekends (Q1 ranks over the whole year; Q11 ranks in each month).
--- How I wrote it: Same ranking as Q1, but ROW_NUMBER is partitioned by month and day type; keep rank <= 5.
 -- Top 5 products in every month of 2011, separately for weekdays and weekends.
+-- Same ranking as Q1, but inside each month and day type; keeps the top 5.
 WITH ranked AS (
     SELECT t.month, t.day_type, p.product_id, p.product_name, SUM(f.revenue) AS revenue,
            ROW_NUMBER() OVER (PARTITION BY t.month, t.day_type
@@ -200,8 +200,8 @@ ORDER BY month, day_type, rank_no;
 
 -- Q12. Quarter-to-quarter revenue growth (%) for each store in 2011.
 -- The first quarter of 2011 has no previous quarter in 2011, so its growth is NULL.
--- How I wrote it: A CTE sums 2011 revenue per store and quarter; LAG gives the previous quarter; growth % from the difference.
 -- Quarter-to-quarter revenue growth of each store in 2011.
+-- Sums 2011 revenue per store and quarter; LAG brings the previous quarter to work out the growth %.
 WITH quarterly AS (
     SELECT s.store_name, t.quarter, SUM(f.revenue) AS revenue
     FROM fact_sales f
@@ -220,8 +220,8 @@ ORDER BY store_name, quarter;
 
 -- Q13. Sales contribution of each supplier in each store, by product name.
 -- Contribution % = share of that store's total revenue.
--- How I wrote it: Sum revenue per store, supplier and product; SUM(SUM(revenue)) OVER (PARTITION BY store) gives the store total to divide by.
 -- Each supplier's and product's share of every store's revenue.
+-- Sums revenue per store, supplier and product and divides it by the store's total (a window SUM).
 SELECT s.store_name, su.supplier_name, p.product_name,
        SUM(f.revenue) AS revenue,
        ROUND(SUM(f.revenue) / SUM(SUM(f.revenue)) OVER (PARTITION BY s.store_name) * 100, 4)
@@ -235,8 +235,8 @@ ORDER BY s.store_name, su.supplier_name, p.product_name;
 
 
 -- Q14. Total sales of each product drilled down by season (all loaded dates).
--- How I wrote it: GROUP BY product and turn the four seasons into columns with SUM(CASE WHEN season = ...).
 -- Each product's sales in spring, summer, fall and winter.
+-- Sums revenue per product with one column per season.
 SELECT p.product_id, p.product_name,
        SUM(CASE WHEN t.season = 'Spring' THEN f.revenue ELSE 0 END) AS spring,
        SUM(CASE WHEN t.season = 'Summer' THEN f.revenue ELSE 0 END) AS summer,
@@ -252,8 +252,8 @@ ORDER BY total_sales DESC;
 
 -- Q15. Month-to-month revenue volatility (%) for each store and supplier pair,
 -- over all loaded months (December 2010 to December 2011).
--- How I wrote it: A CTE sums revenue per store, supplier and month; LAG over each store-supplier pair gives the previous month; the change % is the volatility.
 -- How much each store-supplier pair's revenue goes up or down from month to month.
+-- Sums revenue per store, supplier and month; LAG brings the previous month to work out the change %.
 WITH monthly AS (
     SELECT s.store_name, su.supplier_name, t.year, t.month, SUM(f.revenue) AS revenue
     FROM fact_sales f
@@ -279,8 +279,8 @@ ORDER BY store_name, supplier_name, year, month;
 -- A pair can never be in more carts than either of its two products, so only
 -- products bought in at least 400 carts can reach the top 5: on the loaded
 -- data the 5th pair is in 519 carts (if the 5th count were below 400, lower 400).
--- How I wrote it: Self-join the fact table on transaction_id to make product pairs in the same cart, count distinct carts per pair and keep the top 5; only products in 400+ carts are paired, to make it fast.
 -- The 5 product pairs most often bought in the same cart.
+-- Joins the fact table to itself on transaction_id to pair products in the same cart, counts the carts per pair and keeps the top 5; only products in 400+ carts are paired, which keeps it fast.
 WITH popular AS (
     SELECT product_key
     FROM fact_sales
@@ -309,8 +309,8 @@ ORDER BY pairs.carts_together DESC, product_a, product_b;
 
 -- Q17. Revenue for 2011 by store, supplier and product with ROLLUP:
 -- product rows, supplier subtotals, store subtotals and the grand total.
--- How I wrote it: GROUP BY store, supplier, product WITH ROLLUP adds the subtotal rows; GROUPING() tells which rows are subtotals to label them.
 -- 2011 revenue by store, supplier and product, with supplier and store subtotals and a grand total.
+-- Groups by store, supplier and product WITH ROLLUP for the subtotals; GROUPING() labels the subtotal rows.
 SELECT CASE WHEN GROUPING(s.store_name) = 1     THEN 'Grand total'
             WHEN GROUPING(su.supplier_name) = 1 THEN 'Store subtotal'
             WHEN GROUPING(p.product_name) = 1   THEN 'Supplier subtotal'
@@ -328,8 +328,8 @@ GROUP BY s.store_name, su.supplier_name, p.product_name WITH ROLLUP;
 
 -- Q18. Quantity and revenue per product for the first half (Jan-Jun),
 -- the second half (Jul-Dec, up to 9 December) and the full year 2011.
--- How I wrote it: Keep 2011, GROUP BY product, and SUM(CASE WHEN half_year = 1 or 2 ...) gives quantity and revenue for each half as columns.
 -- Each product's quantity and revenue in the first half, the second half and the whole of 2011.
+-- Keeps 2011 and sums quantity and revenue per product, with columns for each half and the full year.
 SELECT p.product_id, p.product_name,
        SUM(CASE WHEN t.half_year = 1 THEN f.quantity ELSE 0 END) AS h1_quantity,
        SUM(CASE WHEN t.half_year = 1 THEN f.revenue  ELSE 0 END) AS h1_revenue,
@@ -348,8 +348,8 @@ ORDER BY year_revenue DESC;
 -- Q19. Revenue spikes: days on which a product's revenue is more than twice
 -- its own average daily revenue (average over the days the product sold,
 -- all loaded dates). Biggest spikes first.
--- How I wrote it: CTE daily sums revenue per product per day; CTE average averages those days per product; keep the days above twice that average.
 -- Days on which a product sold more than twice its normal daily revenue.
+-- Sums revenue per product per day, averages those days per product and keeps the days above twice the average.
 WITH daily AS (
     SELECT f.product_key, t.full_date, SUM(f.revenue) AS day_revenue
     FROM fact_sales f
@@ -374,8 +374,8 @@ ORDER BY times_average DESC;
 -- Q20. View STORE_QUARTERLY_SALES: total quarterly sales by store.
 -- MySQL does not keep ORDER BY inside CREATE VIEW, so the SELECT that
 -- reads the view orders by store name and then by quarter.
--- How I wrote it: CREATE VIEW groups revenue by store, year and quarter; the SELECT on the view does the sorting, because a view cannot keep ORDER BY.
 -- A saved view of total sales per store per quarter.
+-- The view groups revenue by store, year and quarter; the SELECT on it does the sorting, since a view cannot keep ORDER BY.
 DROP VIEW IF EXISTS STORE_QUARTERLY_SALES;
 CREATE VIEW STORE_QUARTERLY_SALES AS
 SELECT s.store_name, t.year, t.quarter, SUM(f.revenue) AS total_sales
@@ -393,8 +393,8 @@ ORDER BY store_name, year, quarter;
 -- views, so the result of the view is stored in a table. Reading it does
 -- not recompute the joins and the sums. To refresh it after new loads,
 -- run these two statements again.
--- How I wrote it: CREATE TABLE ... AS SELECT from the view stores the result once, so reading it needs no joins or sums.
 -- A materialized copy of the view: fast to read, refreshed by running these statements again.
+-- Stores the view's result in a table once, so reading it needs no joins or sums.
 DROP TABLE IF EXISTS MV_STORE_QUARTERLY_SALES;
 CREATE TABLE MV_STORE_QUARTERLY_SALES AS
 SELECT store_name, year, quarter, total_sales

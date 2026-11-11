@@ -471,12 +471,12 @@ function pickQuery(i) {
   const mv = CUR.title.startsWith("Materialized");
   $("#q-num").textContent = CUR.q ? `Q${CUR.q} · ${QKIND[CUR.q]}` : (mv ? "Materialized view" : "Loaded dates");
   // titles that run over two comment lines continue in the first note
-  // the line right after "How I wrote it:" is the one-line explanation
-  const hi = CUR.notes.findIndex(n => n.startsWith("How I wrote it:")), how = CUR.notes[hi], one = hi >= 0 ? CUR.notes[hi + 1] : undefined;
-  $("#q-explain").hidden = !(one || how);
+  // the last two comment lines of every query: what it shows, then how it is written
+  const two = CUR.notes.length >= 2 ? CUR.notes.slice(-2) : [], one = two[0], how = two[1];
+  $("#q-explain").hidden = !two.length;
   $("#q-one").textContent = one || "";
-  $("#q-how").textContent = how ? how.replace("How I wrote it:", "").trim() : "";
-  let title = CUR.title.replace(/^Q\d+\.\s*/, ""), notes = CUR.notes.filter(n => n !== one && n !== how);
+  $("#q-how").textContent = how || "";
+  let title = CUR.title.replace(/^Q\d+\.\s*/, ""), notes = CUR.notes.slice(0, two.length ? -2 : undefined);
   while (notes.length && /[,(]$|\b(by|for|and|the|of|per|than|twice)$/i.test(title.trim())) title += " " + notes.shift();
   $("#q-title").textContent = title;
   $("#q-notes").textContent = notes.join(" ");
