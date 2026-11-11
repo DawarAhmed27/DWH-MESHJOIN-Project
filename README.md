@@ -178,9 +178,9 @@ time). The browser opens http://localhost:5000. The pages follow the project:
 | How it works | step-through models of the threads and stream buffer, the lock, keeping the speed, MESHJOIN and loading the DW |
 | Live run | start the threads; source, mode and speed commands; live stream buffer, MESHJOIN partitions and queue, shed table, loader and event log |
 | Console | the terminal program's commands (status, peak, non-peak, ...) with the same answers |
-| Data warehouse | schema diagram and live row counts of every table |
+| Data warehouse | schema diagram, live row counts, and a live table view: the newest rows of any table, or the newest sales with every dimension attribute and a check against the Master Data |
 | Analysis | every statement of `Queries-DW.sql` with its explanation, SQL, result table, chart and time |
-| Checks | the checks of `test_dw.py` |
+| Checks | the checks of `test_dw.py`, including the enrichment checks |
 
 "Presenter mode" opens step-by-step demo notes (what to show, what to say) with buttons that run each step;
 the arrow keys move between steps. The command-line program (`src/main.py`) is unchanged and still works on its own.
@@ -191,7 +191,7 @@ Run from the `Mesh-Join` folder after `main.py` (each asks for the MySQL passwor
 
 | Script | Checks |
 |---|---|
-| `python src/test_dw.py` | fact rows, total revenue and dimension counts against values computed from the working data |
+| `python src/test_dw.py` | fact rows, total revenue and dimension counts against the working data; every customer and product attribute against the Master Data; sales_mode and store recomputed with the MD5 rule in SQL |
 | `python src/test_consolidation.py` | revenue and time parts of one transaction, and the time rules on edge dates |
 | `python src/test_shedding.py`, then `python src/test_readback.py` | peak shedding order and non-peak read-back |
 | `python src/test_partitions.py`, `test_online.py`, `test_periodic.py`, `test_meshjoin_core.py`, `test_store.py` | the MESHJOIN steps one at a time |

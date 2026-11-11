@@ -28,7 +28,7 @@ def one(sql):
 
 #expected, from the working data
 rows, revenue, customers, products, minutes = 0, Decimal(0), set(), set(), set()
-with open(os.path.join(PROJECT_DIR, "online_sales_stream.csv"), newline="", encoding="utf-8") as f:
+with open(db.find_file(PROJECT_DIR, "online_sales_stream.csv", ".", "data", "../Data"), newline="", encoding="utf-8") as f:
     for r in csv.DictReader(f):
         rows += 1
         revenue += Decimal(r["unit_price"]) * int(r["quantity"])
@@ -53,6 +53,27 @@ checks = [
     ("stores", 5, one("SELECT COUNT(*) FROM dim_store")),
     ("time (minutes)", len(minutes), one("SELECT COUNT(*) FROM dim_time")),
     ("facts with revenue <= 0", 0, one("SELECT COUNT(*) FROM fact_sales WHERE revenue <= 0")),
+    #enrichment: every dimension value must equal the Master Data row it came from
+    ("customers != Master Data", 0, one("""SELECT COUNT(*) FROM dim_customer c
+        LEFT JOIN customer_master_data m ON m.customer_id = c.customer_id
+        WHERE m.customer_id IS NULL OR NOT (m.gender = c.gender AND m.age_group = c.age_group
+          AND m.occupation = c.occupation AND m.city_category = c.city_category
+          AND m.stay_in_current_city_years = c.stay_in_current_city_years
+          AND m.marital_status = c.marital_status)""")),
+    ("products != Master Data", 0, one("""SELECT COUNT(*) FROM dim_product p
+        LEFT JOIN product_master_data m ON m.product_id = p.product_id
+        WHERE m.product_id IS NULL OR NOT (m.product_name = p.product_name
+          AND m.product_category = p.product_category)""")),
+    ("facts with wrong supplier", 0, one("""SELECT COUNT(*) FROM fact_sales f
+        JOIN dim_product p ON p.product_key = f.product_key
+        JOIN dim_supplier s ON s.supplier_key = f.supplier_key
+        JOIN product_master_data m ON m.product_id = p.product_id
+        WHERE s.supplier_id <> m.supplier_id""")),
+    #sales_mode and store recomputed with the MD5 rule inside MySQL
+    ("facts with wrong mode", 0, one("""SELECT COUNT(*) FROM fact_sales f
+        WHERE f.sales_mode <> IF(CONV(LEFT(MD5(f.transaction_id), 8), 16, 10) % 10 < 7, 'Online', 'Periodic')""")),
+    ("facts with wrong store", 0, one("""SELECT COUNT(*) FROM fact_sales f JOIN dim_store st ON st.store_key = f.store_key
+        WHERE st.store_id <> IF(f.sales_mode = 'Online', 1, 2 + CONV(LEFT(MD5(f.transaction_id), 8), 16, 10) % 4)""")),
 ]
 all_ok = True
 for name, want, got in checks:

@@ -68,7 +68,7 @@ function go(page) {
   go.current = page;
   try { localStorage.setItem("page", page); } catch (e) {}
   if (page === "overview") loadOverview();
-  if (page === "dw") loadSchema();
+  if (page === "dw") { loadSchema(); loadBrowse(); }
   if (page === "analysis" && !QUERIES.length) loadQueries();
   if (page === "live" && charts["c-thr"]) charts["c-thr"].resize();
   if (page === "explain") showSim(showSim.tab || "threads");
@@ -435,6 +435,39 @@ async function loadSchema() {
   });
 }
 $("#schemaRefresh").addEventListener("click", loadSchema);
+
+/* ================= live table view ================= */
+let broSeen = new Set(), broTable = null, broBusy = false;
+const CUST_COLS = ["customer_id", "gender", "age_group", "occupation", "city_category", "stay_years", "marital_status"];
+const PROD_COLS = ["product_id", "product_name", "product_category", "supplier_id", "supplier_name"];
+async function loadBrowse() {
+  if (broBusy) return;
+  if (!ST || !ST.connected) { $("#broMeta").textContent = "Connect in Setup to see the tables."; $("#broTbl").innerHTML = ""; return; }
+  const table = $("#broTable").value, find = $("#broFind").value.trim();
+  if (table !== broTable) { broSeen = new Set(); broTable = table; }
+  broBusy = true;
+  let r;
+  try { r = await api(`/api/browse?table=${encodeURIComponent(table)}&limit=${$("#broLimit").value}&find=${encodeURIComponent(find)}`); }
+  catch (e) { $("#broMeta").innerHTML = `<span class="bad">${esc(e.message)}</span>`; broBusy = false; return; }
+  broBusy = false;
+  const first = broSeen.size === 0;
+  const key = row => String(row[0]);
+  const mi = r.columns.indexOf("matches_master_data");
+  const shown = r.rows.length, ok = mi >= 0 ? r.rows.filter(x => x[mi] === 1 || x[mi] === true).length : null;
+  $("#broMeta").innerHTML = `<span>rows in table: <b>${fmt(r.total)}</b></span><span>showing: <b>${shown}</b> newest${find ? ` matching <b>${esc(find)}</b>` : ""}</span>` +
+    (mi >= 0 && shown ? `<span>match the Master Data: <b class="${ok === shown ? "ok" : "bad"}">${ok} of ${shown}</b></span>` : "") +
+    `<span>updated ${new Date().toTimeString().slice(0, 8)}${r.running ? " · threads running" : ""}</span>`;
+  const cls = c => CUST_COLS.includes(c) ? "grp-c" : PROD_COLS.includes(c) ? "grp-p" : "";
+  $("#broTbl").innerHTML = `<thead><tr>${r.columns.map(c => `<th class="${table === "enriched" ? cls(c) : ""}">${esc(c === "matches_master_data" ? "matches Master Data" : c)}</th>`).join("")}</tr></thead><tbody>${
+    r.rows.length ? r.rows.map(row => `<tr class="${!first && !broSeen.has(key(row)) ? "new" : ""}">${row.map((v, i) => i === mi
+      ? `<td class="${v ? "yes" : "no"}">${v ? "yes" : "NO"}</td>` : `<td title="${esc(v ?? "")}">${v === null ? "—" : esc(v)}</td>`).join("")}</tr>`).join("")
+      : `<tr><td class="empty">No rows yet.</td></tr>`}</tbody>`;
+  r.rows.forEach(row => broSeen.add(key(row)));
+}
+["#broTable", "#broLimit"].forEach(s => $(s).addEventListener("change", loadBrowse));
+$("#broFind").addEventListener("keydown", e => { if (e.key === "Enter") { broSeen = new Set(); loadBrowse(); } });
+$("#broRefresh").addEventListener("click", loadBrowse);
+setInterval(() => { if (go.current === "dw" && $("#broLive").checked && !document.hidden) loadBrowse(); }, 2000);
 
 /* ================= analysis ================= */
 let QUERIES = [], GROUPS = [], CUR = null, LAST = null;

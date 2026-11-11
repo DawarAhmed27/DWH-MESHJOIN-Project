@@ -536,6 +536,92 @@ def api_query():
                    total=len(rows), seconds=secs)
 
 
+#enrichment checks: every count should be 0
+ENRICH_CUSTOMER = """SELECT COUNT(*) FROM dim_customer c
+    LEFT JOIN customer_master_data m ON m.customer_id = c.customer_id
+    WHERE m.customer_id IS NULL OR NOT (m.gender = c.gender AND m.age_group = c.age_group
+      AND m.occupation = c.occupation AND m.city_category = c.city_category
+      AND m.stay_in_current_city_years = c.stay_in_current_city_years AND m.marital_status = c.marital_status)"""
+ENRICH_PRODUCT = """SELECT COUNT(*) FROM dim_product p
+    LEFT JOIN product_master_data m ON m.product_id = p.product_id
+    WHERE m.product_id IS NULL OR NOT (m.product_name = p.product_name AND m.product_category = p.product_category)"""
+ENRICH_SUPPLIER = """SELECT COUNT(*) FROM fact_sales f
+    JOIN dim_product p ON p.product_key = f.product_key
+    JOIN dim_supplier s ON s.supplier_key = f.supplier_key
+    JOIN product_master_data m ON m.product_id = p.product_id
+    WHERE s.supplier_id <> m.supplier_id"""
+MD5_N = "CONV(LEFT(MD5(f.transaction_id), 8), 16, 10)"
+RULE_MODE = f"""SELECT COUNT(*) FROM fact_sales f
+    WHERE f.sales_mode <> IF({MD5_N} % 10 < 7, 'Online', 'Periodic')"""
+RULE_STORE = f"""SELECT COUNT(*) FROM fact_sales f JOIN dim_store st ON st.store_key = f.store_key
+    WHERE st.store_id <> IF(f.sales_mode = 'Online', 1, 2 + {MD5_N} % 4)"""
+
+#latest fact rows with every dimension attribute, and whether they match the Master Data
+ENRICHED = """SELECT f.sale_key, f.transaction_id, f.sales_mode, f.processing_mode, t.event_time,
+       c.customer_id, c.gender, c.age_group, c.occupation, c.city_category,
+       c.stay_in_current_city_years AS stay_years, c.marital_status,
+       p.product_id, p.product_name, p.product_category, s.supplier_id, s.supplier_name,
+       st.store_id, st.store_name, f.quantity, f.revenue,
+       (cm.customer_id IS NOT NULL AND pm.product_id IS NOT NULL
+        AND cm.gender = c.gender AND cm.age_group = c.age_group AND cm.occupation = c.occupation
+        AND cm.city_category = c.city_category AND cm.marital_status = c.marital_status
+        AND cm.stay_in_current_city_years = c.stay_in_current_city_years
+        AND pm.product_name = p.product_name AND pm.product_category = p.product_category
+        AND pm.supplier_id = s.supplier_id) AS matches_master_data
+FROM {source} f
+JOIN dim_customer c  ON c.customer_key = f.customer_key
+JOIN dim_product p   ON p.product_key = f.product_key
+JOIN dim_supplier s  ON s.supplier_key = f.supplier_key
+JOIN dim_store st    ON st.store_key = f.store_key
+JOIN dim_time t      ON t.time_key = f.time_key
+LEFT JOIN customer_master_data cm ON cm.customer_id = c.customer_id
+LEFT JOIN product_master_data pm  ON pm.product_id = p.product_id
+{where}
+ORDER BY f.sale_key DESC LIMIT %s"""
+
+
+#Data warehouse page: the latest rows of one table, or the enriched sales
+@app.get("/api/browse")
+def api_browse():
+    if (r := need_connection()):
+        return r
+    table = request.args.get("table", "enriched")
+    find = request.args.get("find", "").strip()
+    limit = max(1, min(int(request.args.get("limit", 20)), 200))
+    c = E.connect()
+    cur = c.cursor()
+    try:
+        if table == "enriched":
+            cur.execute("SELECT COUNT(*) FROM fact_sales")
+            total = cur.fetchone()[0]
+            if find:
+                sql = ENRICHED.format(source="fact_sales",
+                                      where="WHERE f.transaction_id = %s OR c.customer_id = %s OR p.product_id = %s")
+                cur.execute(sql, (find, find, find, limit))
+            else:
+                sql = ENRICHED.format(source="(SELECT * FROM fact_sales ORDER BY sale_key DESC LIMIT %s)", where="")
+                cur.execute(sql, (limit, limit))
+        else:
+            cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()")
+            if table not in {t for (t,) in cur.fetchall()}:
+                return jsonify(error=f"Unknown table {table}"), 400
+            cur.execute("""SELECT column_name FROM information_schema.key_column_usage
+                           WHERE table_schema = DATABASE() AND table_name = %s AND constraint_name = 'PRIMARY'
+                           ORDER BY ordinal_position""", (table,))
+            pk = [x for (x,) in cur.fetchall()]
+            cur.execute(f"SELECT COUNT(*) FROM `{table}`")
+            total = cur.fetchone()[0]
+            order = f"ORDER BY {', '.join(f'`{k}` DESC' for k in pk)}" if pk else ""
+            cur.execute(f"SELECT * FROM `{table}` {order} LIMIT %s", (limit,))
+        cols = [d[0] for d in cur.description]
+        rows = [[plain(v) for v in r] for r in cur.fetchall()]
+        return jsonify(columns=cols, rows=rows, total=total, running=E.running)
+    except Exception as e:
+        return jsonify(error=str(e)), 400
+    finally:
+        c.close()
+
+
 #Checks page: compare the DW with the working data
 @app.get("/api/checks")
 def api_checks():
@@ -571,6 +657,11 @@ def api_checks():
         ("Stores", 5, one("SELECT COUNT(*) FROM dim_store")),
         ("Minutes in dim_time", len(minutes), one("SELECT COUNT(*) FROM dim_time")),
         ("Facts with revenue <= 0", 0, one("SELECT COUNT(*) FROM fact_sales WHERE revenue <= 0")),
+        ("Customers whose attributes differ from the Master Data", 0, one(ENRICH_CUSTOMER)),
+        ("Products whose name or category differs from the Master Data", 0, one(ENRICH_PRODUCT)),
+        ("Facts with a supplier that is not their product's supplier", 0, one(ENRICH_SUPPLIER)),
+        ("Facts whose sales_mode breaks the MD5 rule", 0, one(RULE_MODE)),
+        ("Facts whose store breaks the MD5 rule", 0, one(RULE_STORE)),
         ("Still on the shed disk", 0, one("SELECT COUNT(*) FROM shed_table")),
     ]
     c.close()

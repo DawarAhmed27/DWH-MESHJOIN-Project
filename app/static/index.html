@@ -203,6 +203,31 @@
           <div class="panel" style="padding:8px"><img class="schema-img" src="/report/schema_diagram.png" alt="Star schema and working tables"></div>
         </div>
         <div class="section">
+          <div class="sec-head"><h3>Live table view</h3><span class="note">the newest rows, read from MySQL while the program runs</span></div>
+          <div class="panel bro">
+            <div class="bro-bar">
+              <label for="broTable" class="sr">Table</label>
+              <select id="broTable">
+                <option value="enriched">Enriched sales: fact + all dimensions, checked against the Master Data</option>
+                <option value="fact_sales">fact_sales</option>
+                <option value="dim_customer">dim_customer</option><option value="dim_product">dim_product</option>
+                <option value="dim_supplier">dim_supplier</option><option value="dim_store">dim_store</option>
+                <option value="dim_time">dim_time</option>
+                <option value="customer_master_data">customer_master_data (Master Data)</option>
+                <option value="product_master_data">product_master_data (Master Data)</option>
+                <option value="periodic_sales_data">periodic_sales_data (staging)</option>
+                <option value="shed_table">shed_table</option>
+              </select>
+              <input id="broFind" class="mono" placeholder="find: invoice, customer or product id" autocomplete="off">
+              <select id="broLimit" aria-label="Rows"><option>20</option><option selected>50</option><option>200</option></select>
+              <label class="bro-live"><input type="checkbox" id="broLive" checked> Live (every 2 s)</label>
+              <button class="btn ghost" id="broRefresh"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button>
+            </div>
+            <div class="bro-meta" id="broMeta"></div>
+            <div class="bro-wrap"><table class="tbl bro-tbl" id="broTbl"></table></div>
+          </div>
+        </div>
+        <div class="section">
           <div class="sec-head"><h3>Tables</h3><button class="btn ghost" id="schemaRefresh"><svg class="i"><use href="#i-refresh"/></svg>Refresh counts</button></div>
           <div class="panel" id="tables"></div>
         </div>
@@ -271,7 +296,7 @@
 
       <section class="page" id="p-checks">
         <div class="section">
-          <div class="sec-head"><div><h3>Is the DW right?</h3><div class="note" style="margin-top:4px">Expected values come from the working data (the online file and the staging table), not from the DW.</div></div><button class="btn primary" id="checkBtn">Run the checks</button></div>
+          <div class="sec-head"><div><h3>Is the DW right?</h3><div class="note" style="margin-top:4px">Counts and revenue are compared with the working data (the online file and the staging table); every dimension value is compared with the Master Data; sales_mode and store are recomputed with the MD5 rule in SQL.</div></div><button class="btn primary" id="checkBtn">Run the checks</button></div>
           <div id="checks"></div>
         </div>
       </section>
