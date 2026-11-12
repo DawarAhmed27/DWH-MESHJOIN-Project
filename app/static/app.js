@@ -761,6 +761,8 @@ async function loadCode() {
     return;
   }
   CB.files = d.files; CB.root = d.root;
+  //the show-tests switch only makes sense when the test files are there (they are not in the submission)
+  $("#cbTests").closest("label").hidden = !d.files.some(f => f.group === "Tests");
   $("#cbRoot").textContent = d.root;
   $("#cbLegend").innerHTML = CB_GROUPS.filter(g => d.files.some(f => f.group === g))
     .map(g => `<span class="cb-key ${CB_CLASS[g]}">${g}</span>`).join("");

@@ -45,9 +45,10 @@ def main():
     put(first("sql/Create-DW.sql"), "Create-DW/Create-DW.sql")
     put(first("sql/Queries-DW.sql"), "Queries-DW/Queries-DW.sql")
 
-    #2. Mesh-Join: the Python project (program, tests, control room)
+    #2. Mesh-Join: the Python project (program and control room; the test_*.py scripts stay out)
     for f in sorted(glob.glob(os.path.join(ROOT, "src", "*.py"))):
-        put(f, "Mesh-Join/src/" + os.path.basename(f))
+        if not os.path.basename(f).startswith("test_"):
+            put(f, "Mesh-Join/src/" + os.path.basename(f))
     for folder, _, names in os.walk(os.path.join(ROOT, "app")):
         if "__pycache__" in folder:
             continue

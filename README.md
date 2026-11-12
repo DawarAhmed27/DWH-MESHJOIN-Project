@@ -50,7 +50,6 @@ Downloaded on **3 November 2026** (file `Online Retail.xlsx`, 541,909 rows).
 | `src/stream.py`, `meshjoin.py` | Stream buffer, OnlineThread, PeriodicThread, MESHJOIN, MeshJoinThread, load shedding |
 | `src/consolidation.py`, `loader.py` | Revenue and dimension rows; LoaderThread that loads the DW |
 | `src/db.py` | MySQL helpers |
-| `src/test_*.py` | Check scripts (see "Checks" below) |
 | `app/` | Optional web control room (see the end of this file) |
 
 ## 1. Create the database
@@ -154,11 +153,8 @@ prints them. Q20 creates the view `STORE_QUARTERLY_SALES`. MySQL has no material
 script stores the view's result in the table `MV_STORE_QUARTERLY_SALES` (run its two statements again
 to refresh it). The whole script takes about 3 minutes; Q16 (product pairs) takes about 20 seconds.
 
-The queries can also be run from Python, which prints the time, row count and first rows of each:
-
-```
-python src/test_queries.py
-```
+The queries can also be run from the control room (Analysis page), which shows the time, row count,
+result table and a chart for each.
 
 ## Control room (web front end, optional)
 
@@ -180,7 +176,7 @@ time). The browser opens http://localhost:5000. The pages follow the project:
 | Console | the terminal program's commands (status, peak, non-peak, ...) with the same answers |
 | Data warehouse | schema diagram, live row counts, and a live table view: the newest rows of any table, or the newest sales with every dimension attribute and a check against the Master Data |
 | Analysis | every statement of `Queries-DW.sql` with its explanation, SQL, result table, chart and time |
-| Checks | the checks of `test_dw.py`, including the enrichment checks |
+| Checks | the checks after a load: counts, revenue, enrichment against the Master Data, MD5 rules |
 | Report | the project report PDF from the `Project-Report` folder |
 | Codebase | a map of how the code files use each other, every file with its code, and buttons to open the project folder |
 
@@ -189,11 +185,19 @@ the arrow keys move between steps. The command-line program (`src/main.py`) is u
 
 ## Checks
 
-Run from the `Mesh-Join` folder after `main.py` (each asks for the MySQL password):
+After a full run, open the **Checks** page of the control room. It compares the DW with the working
+data and the Master Data; every check shows the expected and the actual value:
 
-| Script | Checks |
+| Check | Expected |
 |---|---|
-| `python src/test_dw.py` | fact rows, total revenue and dimension counts against the working data; every customer and product attribute against the Master Data; sales_mode and store recomputed with the MD5 rule in SQL |
-| `python src/test_consolidation.py` | revenue and time parts of one transaction, and the time rules on edge dates |
-| `python src/test_shedding.py`, then `python src/test_readback.py` | peak shedding order and non-peak read-back |
-| `python src/test_partitions.py`, `test_online.py`, `test_periodic.py`, `test_meshjoin_core.py`, `test_store.py` | the MESHJOIN steps one at a time |
+| fact rows, total revenue | same as the online file plus the staging table (397,884 rows) |
+| customers, products, suppliers, stores, minutes | same as the working data |
+| every customer, product and supplier attribute in the DW | equal to the Master Data (0 differences) |
+| sales_mode and store recomputed with the MD5 rule in SQL | 0 differences |
+
+The same can be checked by hand in MySQL Workbench:
+
+```sql
+SELECT COUNT(*) FROM shed_table;                                          -- 0 after non-peak
+SELECT processing_mode, COUNT(*) FROM fact_sales GROUP BY processing_mode; -- adds up to 397,884
+```

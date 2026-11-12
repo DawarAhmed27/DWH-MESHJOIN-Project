@@ -780,7 +780,7 @@ def api_browse():
 #Checks page: compare the DW with the working data
 @app.get("/api/checks")
 def api_checks():
-    """The checks of test_dw.py: expected values from the working data."""
+    """The Checks page: the DW against the working data and the Master Data."""
     if (r := need_connection()):
         return r
     import csv
