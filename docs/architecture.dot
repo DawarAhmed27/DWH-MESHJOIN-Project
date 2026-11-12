@@ -1,0 +1,77 @@
+digraph G {
+  graph [rankdir=TB, fontname="Arial", nodesep=0.35, ranksep=0.42, pad=0.2, newrank=true, compound=true];
+  node  [fontname="Arial", fontsize=12, penwidth=1.3, style="filled", margin="0.16,0.07"];
+  edge  [fontname="Arial", fontsize=10.5, color="#555555", penwidth=1.2, arrowsize=0.75, fontcolor="#333333"];
+
+  // ---------- styles ----------
+  // file: grey note | prep: blue box | table: yellow cylinder | thread: green rounded | memory: purple hexagon | shed: red cylinder
+
+  subgraph cluster_prep {
+    label=<<b>①  PREPARATION</b>   <font point-size="10.5" color="#555555">main.py · runs once before the threads</font>>;
+    labeljust=l; fontsize=13; style="rounded,filled"; fillcolor="#F7F9FC"; color="#9DB3D6"; penwidth=1.2; margin=14;
+
+    X   [shape=note, fillcolor="#F2F2F2", color="#7F7F7F", label=<<b>Online Retail.xlsx</b><br/><font point-size="10">541,909 rows</font>>];
+    C   [shape=box, fillcolor="#DCE8F7", color="#2F5597", label=<<b>Cleaning</b><br/><font point-size="10">4 rules → 397,884 rows</font>>];
+    S   [shape=box, fillcolor="#DCE8F7", color="#2F5597", label=<<b>sales_mode</b><br/><font point-size="10">MD5 rule per cart</font>>];
+    MB  [shape=box, fillcolor="#DCE8F7", color="#2F5597", label=<<b>Master Data</b><br/><font point-size="10">stable MD5 attributes</font>>];
+    OF  [shape=note, fillcolor="#F2F2F2", color="#7F7F7F", label=<<b>online_sales_stream.csv</b><br/><font point-size="10">278,740 online sales</font>>];
+    ST  [shape=cylinder, fillcolor="#FFF2CC", color="#BF9000", label=<<b>periodic_sales_data</b><br/><font point-size="10">48 hourly groups · 119,144</font>>];
+    MD  [shape=cylinder, fillcolor="#FFF2CC", color="#BF9000", label=<<b>Master Data tables</b><br/><font point-size="10">customers: 9 partitions<br/>products: 8 partitions</font>>];
+
+    X -> C -> S;
+    C -> MB -> MD;
+    S -> OF [label=" Online"];
+    S -> ST [label=" Periodic"];
+    {rank=same; S; MB}
+    {rank=same; OF; ST; MD}
+  }
+
+  subgraph cluster_run {
+    label=<<b>②  RUNNING</b>   <font point-size="10.5" color="#555555">4 threads + commands</font>>;
+    labeljust=l; fontsize=13; style="rounded,filled"; fillcolor="#F8FBF5"; color="#A9C79A"; penwidth=1.2; margin=14;
+
+    CMD [shape=hexagon, fillcolor="#EDE4F6", color="#7030A0", label=<<b>Main thread</b><br/><font point-size="10">commands: peak · non-peak<br/>speed · status · quit</font>>];
+    OT  [shape=box, style="rounded,filled", penwidth=2, fillcolor="#E2F0D9", color="#548235", label=<<b>OnlineThread</b><br/><font point-size="10">sends sales at the<br/>peak / non-peak speed</font>>];
+    PT  [shape=box, style="rounded,filled", penwidth=2, fillcolor="#E2F0D9", color="#548235", label=<<b>PeriodicThread</b><br/><font point-size="10">releases 1 group<br/>every simulated hour</font>>];
+    B   [shape=hexagon, fillcolor="#EDE4F6", color="#7030A0", label=<<b>Stream buffer</b><br/><font point-size="10">max 1,000 · online first</font>>];
+    SH  [shape=cylinder, penwidth=2, fillcolor="#FBE3E1", color="#C00000", fontcolor="#5C0000", label=<<b>shed_table</b><br/><font point-size="10">overflow in peak</font>>];
+    M   [shape=box, style="rounded,filled", penwidth=2, fillcolor="#E2F0D9", color="#548235", label=<<b>MeshJoinThread</b><br/><font point-size="10">≤ 500 sales per iteration<br/>hash table H + queue · cycle of 9</font>>];
+    E   [shape=hexagon, fillcolor="#EDE4F6", color="#7030A0", label=<<b>Store added</b><br/><font point-size="10">from the in-memory list</font>>];
+    L   [shape=box, style="rounded,filled", penwidth=2, fillcolor="#E2F0D9", color="#548235", label=<<b>LoaderThread</b><br/><font point-size="10">revenue · dimensions first<br/>online at once · periodic on the hour</font>>];
+
+    CMD -> OT [style=dotted, label=" sets mode\n & speed"];
+    CMD -> PT [style=dotted];
+    OT -> B;
+    PT -> B;
+    OT -> SH [style=dashed, color="#C00000", penwidth=1.6, fontcolor="#C00000", label=" peak:\n buffer full"];
+    PT -> SH [style=dashed, color="#C00000", penwidth=1.6, fontcolor="#C00000", label=" peak: cart\n does not fit"];
+    B -> M [label=" online first,\n then periodic carts"];
+    SH -> M [style=dashed, color="#C00000", penwidth=1.6, fontcolor="#C00000", label=" non-peak:\n fills free places"];
+    M -> E -> L;
+    {rank=same; OT; PT}
+    {rank=same; B; SH}
+  }
+
+  OF -> OT;
+  ST -> PT;
+  MD -> M [label=" 1 customer + 1 product\n partition per iteration", color="#BF9000", fontcolor="#7F6000"];
+
+  DW [shape=cylinder, penwidth=2, fillcolor="#548235", color="#2E4A1D", fontcolor="white", label=<<b>DATA WAREHOUSE</b><br/><font point-size="10">5 dimensions + fact_sales<br/>397,884 rows</font>>];
+  L -> DW [penwidth=2.2, color="#2E4A1D", label=" batches of ≤ 1,000 rows\n or every 0.5 s"];
+
+  // ---------- legend ----------
+  subgraph cluster_key {
+    label=<<b>Legend</b>>; labeljust=l; fontsize=11; style="rounded"; color="#BBBBBB"; margin=8;
+    node [fontsize=10, margin="0.08,0.04"];
+    k1 [shape=note, fillcolor="#F2F2F2", color="#7F7F7F", label="File"];
+    k2 [shape=box, fillcolor="#DCE8F7", color="#2F5597", label="Preparation step"];
+    k3 [shape=cylinder, fillcolor="#FFF2CC", color="#BF9000", label="MySQL table"];
+    k4 [shape=box, style="rounded,filled", penwidth=2, fillcolor="#E2F0D9", color="#548235", label="Thread"];
+    k5 [shape=hexagon, fillcolor="#EDE4F6", color="#7030A0", label="In memory"];
+    k6 [shape=plaintext, style="", label=<<font color="#C00000">- - -▶  shed path</font>>];
+    {rank=same; k1; k2; k3; k4; k5; k6}
+    k1 -> k2 -> k3 -> k4 -> k5 -> k6 [style=invis];
+  }
+  DW -> k3 [style=invis];
+  OF -> CMD [style=invis]; ST -> CMD [style=invis];
+}
