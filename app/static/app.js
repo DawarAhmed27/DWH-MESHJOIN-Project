@@ -776,7 +776,8 @@ async function loadCode() {
 }
 //lays the files out in columns: a file sits one column to the right of every file that uses it
 function drawCodeMap() {
-  const files = CB.files;
+  //only the required project files (an app started before this change also sends other files)
+  const files = CB.files.filter(f => CB_GROUPS.includes(f.group));
   const ids = new Set(files.map(f => f.id));
   const depth = {};
   const deep = (f, seen) => {
@@ -830,7 +831,8 @@ async function openCode(id) {
   $("#cbName").textContent = f.name;
   $("#cbRel").textContent = f.rel;
   $("#cbDesc").textContent = f.desc || "";
-  const chips = list => list.length ? list.map(i => `<button class="cb-chip ${CB_CLASS[CB.files[i].group]}" data-id="${i}">${esc(CB.files[i].name)}</button>`).join("") : `<span class="note">none</span>`;
+  const shown = list => list.filter(i => CB_GROUPS.includes(CB.files[i].group));
+  const chips = list => (list = shown(list)).length ? list.map(i => `<button class="cb-chip ${CB_CLASS[CB.files[i].group]}" data-id="${i}">${esc(CB.files[i].name)}</button>`).join("") : `<span class="note">none</span>`;
   $("#cbUses").innerHTML = chips(f.uses);
   $("#cbUsedBy").innerHTML = chips(f.used_by);
   $("#cbCode").textContent = "Loading …";
