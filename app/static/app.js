@@ -59,6 +59,7 @@ const PAGES = {
   analysis: ["Analysis", "Queries-DW.sql"],
   checks: ["Checks", "The load against the working data"],
   report: ["Report", "The project report, read from the report folder"],
+  code: ["Codebase", "Every code file, how they connect and what is inside"],
 };
 function go(page) {
   $$(".page").forEach(p => p.classList.toggle("on", p.id === "p-" + page));
@@ -75,6 +76,7 @@ function go(page) {
   if (page === "explain") showSim(showSim.tab || "threads");
   if (page === "console") { loadTerm(); setTimeout(() => $("#termIn").focus(), 50); }
   if (page === "report") loadReports();
+  if (page === "code") loadCode();
 }
 /* ================= report: PDF preview ================= */
 async function loadReports() {
@@ -745,3 +747,117 @@ let first = "overview";
 try { first = localStorage.getItem("page") || "overview"; } catch (e) {}
 go(PAGES[first] ? first : "overview");
 loop();
+
+/* ================= codebase: file map + code viewer ================= */
+const CB = { files: [], cur: null, root: "" };
+const CB_GROUPS = ["Run", "Control room", "Pipeline", "Tests", "SQL"];
+const CB_CLASS = { "Run": "g-run", "Control room": "g-app", "Pipeline": "g-src", "Tests": "g-test", "SQL": "g-sql" };
+async function loadCode() {
+  if (CB.files.length) { drawCodeMap(); return; }
+  let d;
+  try { d = await api("/api/code"); }
+  catch (e) {
+    $("#cbMap").innerHTML = `<div class="note cb-old">The running app was started before the Codebase page was added. Close it and start it again with <b>Start Control Room.bat</b>.</div>`;
+    return;
+  }
+  CB.files = d.files; CB.root = d.root;
+  $("#cbRoot").textContent = d.root;
+  $("#cbLegend").innerHTML = CB_GROUPS.filter(g => d.files.some(f => f.group === g))
+    .map(g => `<span class="cb-key ${CB_CLASS[g]}">${g}</span>`).join("");
+  $("#cbList").innerHTML = CB_GROUPS.map(g => {
+    const fs = d.files.filter(f => f.group === g);
+    if (!fs.length) return "";
+    return `<div class="cb-grp">${g}</div>` + fs.map(f =>
+      `<button class="cb-item ${CB_CLASS[g]}" data-id="${f.id}"><span>${esc(f.name)}</span><span class="cb-n">${fmt(f.lines)}</span></button>`).join("");
+  }).join("");
+  drawCodeMap();
+  const main = d.files.find(f => f.name === "main.py") || d.files[0];
+  if (main) openCode(main.id);
+}
+//lays the files out in columns: a file sits one column to the right of every file that uses it
+function drawCodeMap() {
+  const showTests = $("#cbTests").checked;
+  const files = CB.files.filter(f => showTests || f.group !== "Tests");
+  const ids = new Set(files.map(f => f.id));
+  const depth = {};
+  const deep = (f, seen) => {
+    if (depth[f.id] !== undefined) return depth[f.id];
+    const parents = f.used_by.filter(i => ids.has(i) && !seen.has(i));
+    seen.add(f.id);
+    depth[f.id] = parents.length ? 1 + Math.max(...parents.map(i => deep(CB.files[i], seen))) : 0;
+    return depth[f.id];
+  };
+  files.forEach(f => deep(f, new Set()));
+  //files nobody uses and that use nothing (README, requirements) go to the first column
+  const cols = [];
+  files.forEach(f => { (cols[depth[f.id]] ||= []).push(f); });
+  cols.forEach(c => c.sort((a, b) => CB_GROUPS.indexOf(a.group) - CB_GROUPS.indexOf(b.group) || a.name.localeCompare(b.name)));
+  const W = 132, H = 28, GX = 40, GY = 9, PAD = 12;
+  const pos = {};
+  const tallest = Math.max(...cols.map(c => c.length));
+  cols.forEach((c, x) => {
+    const top = PAD + (tallest - c.length) * (H + GY) / 2;
+    c.forEach((f, y) => { pos[f.id] = { x: PAD + x * (W + GX), y: top + y * (H + GY) }; });
+  });
+  const width = PAD * 2 + cols.length * W + (cols.length - 1) * GX, height = PAD * 2 + tallest * (H + GY) - GY;
+  let edges = "";
+  files.forEach(f => f.uses.filter(i => ids.has(i)).forEach(i => {
+    const a = pos[f.id], b = pos[i];
+    const x1 = a.x + W, y1 = a.y + H / 2, x2 = b.x, y2 = b.y + H / 2, mx = (x1 + x2) / 2;
+    edges += `<path class="cb-edge" data-from="${f.id}" data-to="${i}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2 - 4},${y2}" marker-end="url(#cbArrow)"/>`;
+  }));
+  const boxes = files.map(f => `<button class="cb-node ${CB_CLASS[f.group]}" data-id="${f.id}" style="left:${pos[f.id].x}px;top:${pos[f.id].y}px;width:${W}px;height:${H}px" title="${esc(f.desc || f.name)}">${esc(f.name)}</button>`).join("");
+  $("#cbMap").style.width = width + "px";
+  $("#cbMap").style.height = height + "px";
+  $("#cbMap").innerHTML = `<svg width="${width}" height="${height}" aria-hidden="true"><defs><marker id="cbArrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8z" class="cb-tip"/></marker></defs>${edges}</svg>${boxes}`;
+  markCode();
+}
+//highlights the open file and its connections on the map and in the list
+function markCode() {
+  const id = CB.cur;
+  const f = CB.files[id];
+  $$("#cbMap .cb-node, #cbList .cb-item").forEach(b => {
+    const i = +b.dataset.id;
+    b.classList.toggle("on", i === id);
+    b.classList.toggle("rel", !!f && i !== id && (f.uses.includes(i) || f.used_by.includes(i)));
+  });
+  $$("#cbMap .cb-edge").forEach(e => e.classList.toggle("on", +e.dataset.from === id || +e.dataset.to === id));
+}
+async function openCode(id) {
+  const f = CB.files[id];
+  if (!f) return;
+  CB.cur = id;
+  markCode();
+  $("#cbName").textContent = f.name;
+  $("#cbRel").textContent = f.rel;
+  $("#cbDesc").textContent = f.desc || "";
+  const chips = list => list.length ? list.map(i => `<button class="cb-chip ${CB_CLASS[CB.files[i].group]}" data-id="${i}">${esc(CB.files[i].name)}</button>`).join("") : `<span class="note">none</span>`;
+  $("#cbUses").innerHTML = chips(f.uses);
+  $("#cbUsedBy").innerHTML = chips(f.used_by);
+  $("#cbCode").textContent = "Loading …";
+  const d = await api("/api/code/file?id=" + id).catch(() => null);
+  if (!d || CB.cur !== id) return;
+  CB.path = d.path;
+  const comment = /\.(py|bat|txt)$/.test(f.name) ? /^(\s*)(#.*|rem .*|REM .*|::.*)$/ : /\.sql$/.test(f.name) ? /^(\s*)(--.*)$/ : /\.(js|css)$/.test(f.name) ? /^(\s*)(\/\/.*|\/\*.*|\*.*)$/ : null;
+  $("#cbCode").innerHTML = d.text.replace(/\n$/, "").split("\n").map((line, n) => {
+    const m = comment && line.match(comment);
+    const body = m ? `${esc(m[1])}<span class="cb-com">${esc(m[2])}</span>` : esc(line);
+    return `<span class="cb-ln">${n + 1}</span>${body || " "}`;
+  }).join("\n");
+  $("#cbCode").parentElement.scrollTop = 0;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("#p-code [data-id]");
+  if (b) openCode(+b.dataset.id);
+});
+$("#cbTests").addEventListener("change", drawCodeMap);
+async function openFolder(id) {
+  const r = await fetch("/api/code/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).then(x => x.json()).catch(() => null);
+  if (!r || !r.ok) toast("Could not open the folder. Path: " + (r ? r.path : CB.root));
+}
+$("#cbOpenRoot").addEventListener("click", () => openFolder(null));
+$("#cbShow").addEventListener("click", () => { if (CB.cur !== null) openFolder(CB.cur); });
+$("#cbCopy").addEventListener("click", async () => {
+  const path = CB.path || CB.root;
+  try { await navigator.clipboard.writeText(path); toast("Path copied"); } catch (e) { toast(path); }
+});

@@ -36,6 +36,7 @@
       <button data-page="analysis"><span class="stop"></span>Analysis</button>
       <button data-page="checks"><span class="stop"></span>Checks</button>
       <button data-page="report"><span class="stop"></span>Report</button>
+      <button data-page="code"><span class="stop"></span>Codebase</button>
     </nav>
     <div class="rail-foot">
       <button class="btn" id="presentBtn"><svg class="i"><use href="#i-present"/></svg>Presenter mode</button>
@@ -292,6 +293,40 @@
           <button class="btn" data-cmd="online">online</button><button class="btn" data-cmd="periodic">periodic</button><button class="btn" data-cmd="both">both</button>
           <span class="sep"></span>
           <button class="btn danger" data-cmd="quit">quit</button>
+        </div>
+      </section>
+
+      <section class="page" id="p-code">
+        <div class="panel cb-panel">
+          <div class="bro-bar">
+            <span class="cb-title">How the files are connected</span>
+            <span class="note">An arrow means “uses”: imports it, runs it or loads it. Click a box to open the file.</span>
+            <label class="cb-check"><input type="checkbox" id="cbTests"> show tests</label>
+            <button class="btn" id="cbOpenRoot">Open project folder</button>
+          </div>
+          <div class="cb-legend" id="cbLegend"></div>
+          <div class="cb-mapwrap"><div class="cb-map" id="cbMap"></div></div>
+          <div class="cb-root note">Project folder: <span class="mono" id="cbRoot"></span></div>
+        </div>
+        <div class="cb-main">
+          <nav class="panel cb-list" id="cbList" aria-label="Code files"></nav>
+          <div class="panel cb-view">
+            <div class="cb-head">
+              <div class="cb-id">
+                <div><b id="cbName">Pick a file</b> <span class="mono cb-rel" id="cbRel"></span></div>
+                <div class="note" id="cbDesc"></div>
+              </div>
+              <div class="cb-acts">
+                <button class="btn ghost" id="cbCopy">Copy path</button>
+                <button class="btn" id="cbShow">Show in folder</button>
+              </div>
+            </div>
+            <div class="cb-links">
+              <div><span class="cb-lbl">Uses</span><span id="cbUses"></span></div>
+              <div><span class="cb-lbl">Used by</span><span id="cbUsedBy"></span></div>
+            </div>
+            <div class="cb-codewrap"><pre class="cb-code" id="cbCode"></pre></div>
+          </div>
         </div>
       </section>
 

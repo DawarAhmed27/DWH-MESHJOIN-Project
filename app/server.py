@@ -306,6 +306,146 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+#Codebase page: every code file of the project, what it does and which files it uses
+def code_files():
+    files = []
+
+    def add(group, path, name=None):
+        if path and os.path.isfile(path):
+            files.append({"group": group, "path": path, "name": name or os.path.basename(path)})
+
+    src = os.path.join(PROJECT_DIR, "src")
+    mods = sorted(f for f in os.listdir(src) if f.endswith(".py")) if os.path.isdir(src) else []
+    add("Run", db.find_file(PROJECT_DIR, "Start Control Room.bat", "."))
+    add("Run", db.find_file(PROJECT_DIR, "requirements.txt", "."))
+    add("Run", db.find_file(PROJECT_DIR, "README.md", ".", "../ReadMe"))
+    add("Control room", os.path.join(APP_DIR, "server.py"))
+    static = os.path.join(APP_DIR, "static")
+    for name in ("index.html", "app.js", "style.css", "sims.js", "sims.css"):
+        add("Control room", os.path.join(static, name))
+    for f in mods:
+        add("Tests" if f.startswith("test_") else "Pipeline", os.path.join(src, f))
+    add("SQL", db.find_file(PROJECT_DIR, "Create-DW.sql", "sql", "../Create-DW"))
+    add("SQL", db.find_file(PROJECT_DIR, "Queries-DW.sql", "sql", "../Queries-DW"))
+    return files
+
+
+#first docstring or comment line of a file, used as its one-line description
+def describe(text, name):
+    m = re.match(r'\s*(?:"""|\'\'\')\s*(.+)', text)
+    if m:
+        return m.group(1).strip().rstrip('."')
+    for line in text.splitlines()[:15]:
+        s = line.strip()
+        for mark in ("#", "//", "--", "/*", "<!--", "REM ", "rem ", "::"):
+            if s.startswith(mark) and len(s) > len(mark) + 3 and not s.startswith("#!"):
+                return s[len(mark):].strip(" -*>").strip()
+    return {"requirements.txt": "Python packages the program needs",
+            "README.md": "How to set up and run the project"}.get(name, "")
+
+
+#a Python file without its comments and docstrings, so only real code is searched
+def py_code(text):
+    import tokenize
+    out = []
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(text).readline):
+            if tok.type == tokenize.COMMENT or (tok.type == tokenize.STRING and tok.string.lstrip("rbuRBU").startswith(('"""', "\'\'\'"))):
+                continue
+            out.append(tok.string)
+    except (tokenize.TokenError, IndentationError):
+        return text
+    return " ".join(out)
+
+
+#which files a file really uses: Python imports and file names in code, src/href in HTML,
+#the /api calls of app.js and the commands of the .bat file (comments are ignored)
+def code_graph():
+    files = code_files()
+    for i, f in enumerate(files):
+        with open(f["path"], encoding="utf-8", errors="replace") as fh:
+            f["text"] = fh.read()
+        f["id"] = i
+        f["lines"] = f["text"].count("\n") + 1
+        f["desc"] = describe(f["text"], f["name"])
+    by_name = {f["name"]: f for f in files}
+    stems = {os.path.splitext(f["name"])[0]: f for f in files if f["name"].endswith(".py")}
+
+    def named_in(code, f):
+        return {g["id"] for g in files if g is not f and not g["name"].endswith(".py")
+                and re.search(r"(?<![\w-])" + re.escape(g["name"]) + r"(?![\w-])", code)}
+
+    for f in files:
+        name, text, uses = f["name"], f["text"], set()
+        if name.endswith(".py"):
+            code = py_code(text)
+            for m in re.finditer(r"^\s*(?:from|import)\s+(\w+)", text, re.M):
+                g = stems.get(m.group(1))
+                if g and g is not f:
+                    uses.add(g["id"])
+            uses |= {i for i in named_in(code, f) if files[i]["group"] == "SQL"}
+        elif name.endswith(".html"):
+            for m in re.finditer(r'(?:src|href)="([^"#?]+)', text):
+                g = by_name.get(os.path.basename(m.group(1)))
+                if g:
+                    uses.add(g["id"])
+        elif name == "app.js" and "/api/" in text and "server.py" in by_name:
+            uses.add(by_name["server.py"]["id"])
+        elif name.endswith(".bat"):
+            code = "\n".join(l for l in text.splitlines() if not l.strip().lower().startswith(("rem", "::", "@rem")))
+            uses |= named_in(code, f)
+            for m in re.finditer(r"(\w+)\.py", code):
+                if m.group(1) in stems:
+                    uses.add(stems[m.group(1)]["id"])
+        uses.discard(f["id"])
+        f["uses"] = sorted(uses)
+    for f in files:
+        f["used_by"] = [g["id"] for g in files if f["id"] in g["uses"]]
+    return files
+
+
+@app.get("/api/code")
+def api_code():
+    files = code_graph()
+    return jsonify({"root": PROJECT_DIR,
+                    "files": [{**{k: f[k] for k in ("id", "group", "name", "lines", "desc", "uses", "used_by")},
+                               "rel": os.path.relpath(f["path"], os.path.dirname(PROJECT_DIR))} for f in files]})
+
+
+@app.get("/api/code/file")
+def api_code_file():
+    files = code_files()
+    i = request.args.get("id", type=int)
+    if i is None or not 0 <= i < len(files):
+        return jsonify({"error": "unknown file"}), 404
+    with open(files[i]["path"], encoding="utf-8", errors="replace") as fh:
+        return jsonify({"name": files[i]["name"], "path": files[i]["path"], "text": fh.read()})
+
+
+#opens the project folder (or the folder of one file, with the file selected) in the file explorer
+@app.post("/api/code/open")
+def api_code_open():
+    i = (request.get_json(silent=True) or {}).get("id")
+    files = code_files()
+    path = files[i]["path"] if isinstance(i, int) and 0 <= i < len(files) else PROJECT_DIR
+    try:
+        if sys.platform.startswith("win"):
+            import subprocess
+            if os.path.isfile(path):
+                subprocess.Popen(["explorer", "/select,", os.path.normpath(path)])
+            else:
+                os.startfile(path)
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", "-R", path] if os.path.isfile(path) else ["open", path])
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", os.path.dirname(path) if os.path.isfile(path) else path])
+        return jsonify({"ok": True, "path": path})
+    except Exception as e:
+        return jsonify({"ok": False, "path": path, "error": str(e)})
+
+
 #Report page: the PDFs in the report folder, newest first
 @app.get("/api/reports")
 def api_reports():

@@ -181,6 +181,8 @@ time). The browser opens http://localhost:5000. The pages follow the project:
 | Data warehouse | schema diagram, live row counts, and a live table view: the newest rows of any table, or the newest sales with every dimension attribute and a check against the Master Data |
 | Analysis | every statement of `Queries-DW.sql` with its explanation, SQL, result table, chart and time |
 | Checks | the checks of `test_dw.py`, including the enrichment checks |
+| Report | the project report PDF from the `Project-Report` folder |
+| Codebase | a map of how the code files use each other, every file with its code, and buttons to open the project folder |
 
 "Presenter mode" opens step-by-step demo notes (what to show, what to say) with buttons that run each step;
 the arrow keys move between steps. The command-line program (`src/main.py`) is unchanged and still works on its own.
