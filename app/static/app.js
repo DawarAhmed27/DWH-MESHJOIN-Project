@@ -58,6 +58,7 @@ const PAGES = {
   dw: ["Data warehouse", "Star schema and working tables"],
   analysis: ["Analysis", "Queries-DW.sql"],
   checks: ["Checks", "The load against the working data"],
+  report: ["Report", "The project report, read from the report folder"],
 };
 function go(page) {
   $$(".page").forEach(p => p.classList.toggle("on", p.id === "p-" + page));
@@ -73,7 +74,34 @@ function go(page) {
   if (page === "live" && charts["c-thr"]) charts["c-thr"].resize();
   if (page === "explain") showSim(showSim.tab || "threads");
   if (page === "console") { loadTerm(); setTimeout(() => $("#termIn").focus(), 50); }
+  if (page === "report") loadReports();
 }
+/* ================= report: PDF preview ================= */
+async function loadReports() {
+  const files = await api("/api/reports").catch(() => []);
+  const sel = $("#repFile"), keep = sel.value;
+  sel.innerHTML = files.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join("");
+  $("#repEmpty").hidden = files.length > 0;
+  $("#repFrame").hidden = !files.length;
+  $("#repOpen").hidden = !files.length;
+  sel.hidden = !files.length;
+  loadReports.files = files;
+  if (!files.length) { $("#repMeta").textContent = ""; return; }
+  if (files.some(f => f.name === keep)) sel.value = keep;
+  showReport(true);
+}
+function showReport(force) {
+  const f = (loadReports.files || []).find(x => x.name === $("#repFile").value);
+  if (!f) return;
+  const when = new Date(f.modified * 1000);
+  $("#repMeta").textContent = `${fmt(f.size / 1024)} KB · saved ${when.toLocaleDateString("en-GB", { day: "numeric", month: "short" })} ${when.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+  //the saved time in the address makes the browser load a re-exported PDF instead of its old copy
+  const src = `/report/${encodeURIComponent(f.name)}?v=${Math.round(f.modified)}`;
+  $("#repOpen").href = src;
+  if (force || $("#repFrame").dataset.src !== src) { $("#repFrame").dataset.src = src; $("#repFrame").src = src + "#view=FitH"; }
+}
+$("#repFile").addEventListener("change", () => showReport(true));
+$("#repRefresh").addEventListener("click", loadReports);
 /* ================= how it works: manual simulators ================= */
 const SIM = {};
 function showSim(tab) {

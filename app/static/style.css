@@ -311,6 +311,13 @@ select.input { padding-right: 24px; font-size: var(--t-sm); }
 .bro-meta b { color: var(--ink); font-variant-numeric: tabular-nums; }
 .bro-meta .ok { color: var(--ok); font-weight: 600; } .bro-meta .bad { color: var(--shed); font-weight: 600; }
 .bro-wrap { overflow: auto; max-height: 520px; }
+/* ================= report preview ================= */
+.rep { padding: 0; overflow: hidden; }
+.rep [hidden] { display: none !important; }
+.rep a.btn { text-decoration: none; }
+.rep .bro-bar #repMeta { color: var(--ink-3); font-size: var(--t-xs); margin-right: auto; }
+.rep-frame { display: block; width: 100%; height: calc(100vh - 210px); min-height: 480px; border: 0; background: #F4F5F2; }
+.rep-empty { padding: var(--s5, 24px) var(--s4); font-size: var(--t-sm); color: var(--ink-2); }
 .bro-tbl { font-size: 12px; }
 .bro-tbl th { position: sticky; top: 0; z-index: 1; white-space: nowrap; }
 .bro-tbl td { white-space: nowrap; font-variant-numeric: tabular-nums; max-width: 260px; overflow: hidden; text-overflow: ellipsis; }

@@ -35,6 +35,7 @@
       <button data-page="dw"><span class="stop"></span>Data warehouse</button>
       <button data-page="analysis"><span class="stop"></span>Analysis</button>
       <button data-page="checks"><span class="stop"></span>Checks</button>
+      <button data-page="report"><span class="stop"></span>Report</button>
     </nav>
     <div class="rail-foot">
       <button class="btn" id="presentBtn"><svg class="i"><use href="#i-present"/></svg>Presenter mode</button>
@@ -291,6 +292,20 @@
           <button class="btn" data-cmd="online">online</button><button class="btn" data-cmd="periodic">periodic</button><button class="btn" data-cmd="both">both</button>
           <span class="sep"></span>
           <button class="btn danger" data-cmd="quit">quit</button>
+        </div>
+      </section>
+
+      <section class="page" id="p-report">
+        <div class="panel rep">
+          <div class="bro-bar">
+            <label for="repFile" class="sr">Report file</label>
+            <select id="repFile"></select>
+            <span class="note" id="repMeta"></span>
+            <a class="btn ghost" id="repOpen" target="_blank" rel="noopener">Open in a new tab</a>
+            <button class="btn ghost" id="repRefresh"><svg class="i"><use href="#i-refresh"/></svg>Refresh</button>
+          </div>
+          <div class="rep-empty note" id="repEmpty" hidden>No PDF in the report folder yet. In Word, use File → Save As → PDF and save it in the <span class="mono">report</span> folder (or <span class="mono">Project-Report</span> in the submission), then press Refresh.</div>
+          <iframe id="repFrame" class="rep-frame" title="Project report"></iframe>
         </div>
       </section>
 

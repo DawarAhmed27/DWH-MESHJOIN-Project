@@ -306,6 +306,20 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+#Report page: the PDFs in the report folder, newest first
+@app.get("/api/reports")
+def api_reports():
+    found = {}
+    for folder in ("report", "../Project-Report"):
+        path = os.path.normpath(os.path.join(PROJECT_DIR, folder))
+        if os.path.isdir(path):
+            for name in os.listdir(path):
+                if name.lower().endswith(".pdf") and name not in found:
+                    st = os.stat(os.path.join(path, name))
+                    found[name] = {"name": name, "size": st.st_size, "modified": st.st_mtime}
+    return jsonify(sorted(found.values(), key=lambda f: -f["modified"]))
+
+
 #serves the report files
 @app.get("/report/<path:name>")
 def report_file(name):
