@@ -148,8 +148,8 @@ Periodic results are loaded once every simulated hour, after they have been join
 
 1. Open `Queries-DW/Queries-DW.sql` in MySQL Workbench.
 2. Double-click `dwh_project` in the Schemas list so it is the default schema.
-3. Run the whole script, or select one query and run it. Each query starts with a comment `-- Qn.`,
-   and its last two comment lines say what it shows and how it works.
+3. Run the whole script, or select one query and run it. Each query starts with a comment `-- Qn.`
+   (the question), and the next comment line says how it works and what its SQL terms mean.
 
 The loaded dates are 1 December 2010 to 9 December 2011, so "the loaded year" is 2011 and "the latest
 six months" are July to December 2011; the script names these dates in a comment and its first query

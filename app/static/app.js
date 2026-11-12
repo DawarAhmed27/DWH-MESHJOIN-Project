@@ -539,12 +539,11 @@ function pickQuery(i) {
   const mv = CUR.title.startsWith("Materialized");
   $("#q-num").textContent = CUR.q ? `Q${CUR.q}${CUR.part} · ${QKIND[CUR.q + CUR.part] || QKIND[CUR.q]}` : (mv ? "Materialized view" : "Loaded dates");
   // titles that run over two comment lines continue in the first note
-  // the last two comment lines of every query: what it shows, then how it is written
-  const two = CUR.notes.length >= 2 ? CUR.notes.slice(-2) : [], one = two[0], how = two[1];
-  $("#q-explain").hidden = !two.length;
-  $("#q-one").textContent = one || "";
-  $("#q-how").textContent = how || "";
-  let title = CUR.title.replace(/^Q\d+[a-z]?\.\s*/, ""), notes = CUR.notes.slice(0, two.length ? -2 : undefined);
+  // the last comment line of every query says how it works and what its SQL terms mean
+  const how = CUR.notes.length ? CUR.notes[CUR.notes.length - 1] : "";
+  $("#q-explain").hidden = !how;
+  $("#q-how").textContent = how;
+  let title = CUR.title.replace(/^Q\d+[a-z]?\.\s*/, ""), notes = CUR.notes.slice(0, -1);
   while (notes.length && /[,(]$|\b(by|for|and|the|of|per|than|twice)$/i.test(title.trim())) title += " " + notes.shift();
   $("#q-title").textContent = title;
   $("#q-notes").textContent = notes.join(" ");
