@@ -1,0 +1,51 @@
+digraph MJ {
+  graph [rankdir=TB, fontname="Arial", nodesep=0.3, ranksep=0.45, pad=0.2, newrank=true];
+  node  [fontname="Arial", fontsize=11, penwidth=1.3, style="filled", margin="0.12,0.06"];
+  edge  [fontname="Arial", fontsize=10, color="#555555", penwidth=1.2, arrowsize=0.75, fontcolor="#333333"];
+
+  B  [shape=hexagon, fillcolor="#EDE4F6", color="#7030A0", label=<<b>Stream buffer</b><br/><font point-size="9.5">online first,<br/>then periodic carts</font>>];
+  SH [shape=cylinder, penwidth=1.8, fillcolor="#FBE3E1", color="#C00000", fontcolor="#5C0000", label=<<b>shed_table</b><br/><font point-size="9.5">non-peak only</font>>];
+
+  subgraph cluster_mem {
+    label=<<b>MeshJoinThread · memory</b>>; labeljust=l; labelloc=b; fontsize=12; style="rounded,filled"; fillcolor="#F8FBF5"; color="#548235"; penwidth=1.6; margin=12;
+
+    Q [shape=plain, label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="5" color="#7030A0">
+        <tr><td colspan="5" align="right" bgcolor="#EDE4F6"><b>Queue</b>  <font point-size="9.5">(chunks of ≤ 500 sales, oldest on the right)</font></td></tr>
+        <tr>
+          <td bgcolor="#FFFFFF" port="new"><font point-size="10">chunk<br/>age 0</font></td>
+          <td bgcolor="#FFFFFF"><font point-size="10">age 1</font></td>
+          <td bgcolor="#FFFFFF"><font point-size="10">…</font></td>
+          <td bgcolor="#FFFFFF"><font point-size="10">age 7</font></td>
+          <td bgcolor="#FBE3C8" port="old"><font point-size="10"><b>age 8</b><br/>oldest</font></td>
+        </tr>
+      </table>>];
+
+    H [shape=plain, label=<
+      <table border="0" cellborder="1" cellspacing="0" cellpadding="5" color="#7030A0">
+        <tr><td colspan="2" bgcolor="#EDE4F6"><b>Hash table H</b>  <font point-size="9.5">(same sales, two indexes)</font></td></tr>
+        <tr><td bgcolor="#FFFFFF"><b>H_cust</b><br/><font point-size="9.5">customer_id → sales</font></td>
+            <td bgcolor="#FFFFFF"><b>H_prod</b><br/><font point-size="9.5">product_id → sales</font></td></tr>
+        <tr><td colspan="2" bgcolor="#FFFFFF"><font point-size="9.5">each sale: customer_matched · product_matched</font></td></tr>
+      </table>>];
+
+    DB [shape=box, fillcolor="#FFF2CC", color="#BF9000", label=<<b>Disk buffer</b><br/><font point-size="9.5">1 customer page (500 rows)<br/>+ 1 product page (500 rows)</font>>];
+
+    Q -> H [dir=both, arrowhead=none, arrowtail=none, style=dashed, color="#7030A0", label=" points to"];
+    DB -> H [color="#2F5597", penwidth=1.8, fontcolor="#2F5597", label=<<b>③</b> probe: matching sales<br/>copy the attributes,<br/>set the flag>];
+    {rank=same; DB; Q}
+    DB -> Q [style=invis];
+  }
+
+  MD [shape=cylinder, fillcolor="#FFF2CC", color="#BF9000", label=<<b>Master Data (disk)</b><br/><font point-size="9.5">customers: pages 0 … 8<br/>products: pages 0 … 7<br/>read in an endless loop</font>>];
+
+  OUT [shape=box, style="rounded,filled", penwidth=2, fillcolor="#548235", color="#2E4A1D", fontcolor="white", label=<<b>Enriched sales</b><br/><font point-size="9.5">+ store → LoaderThread</font>>];
+
+  B  -> Q:new:n [penwidth=1.8, label=<<b>①</b> take ≤ 500 sales<br/>as a new chunk>];
+  SH -> Q:new:n [style=dashed, color="#C00000", fontcolor="#C00000", label=" fills free places"];
+  MD -> DB [color="#BF9000", penwidth=1.8, fontcolor="#7F6000", label=<<b>②</b> next page of each<br/>(k_cust, k_prod)>];
+  Q:old:e -> OUT [penwidth=1.8, color="#2E4A1D", label=<<b>④</b> after 9 iterations<br/>(cycle = max(9, 8))<br/>the oldest chunk leaves>];
+
+  {rank=same; B; SH; MD}
+  MD -> B -> SH [style=invis];
+}
