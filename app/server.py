@@ -324,7 +324,8 @@ def code_files():
     for name in ("index.html", "app.js", "style.css", "sims.js", "sims.css"):
         add("Control room", os.path.join(static, name))
     for f in mods:
-        add("Tests" if f.startswith("test_") else "Pipeline", os.path.join(src, f))
+        if not f.startswith("test_"):
+            add("Pipeline", os.path.join(src, f))
     add("SQL", db.find_file(PROJECT_DIR, "Create-DW.sql", "sql", "../Create-DW"))
     add("SQL", db.find_file(PROJECT_DIR, "Queries-DW.sql", "sql", "../Queries-DW"))
     return files

@@ -750,8 +750,10 @@ loop();
 
 /* ================= codebase: file map + code viewer ================= */
 const CB = { files: [], cur: null, root: "" };
-const CB_GROUPS = ["Run", "Control room", "Pipeline", "Tests", "SQL"];
-const CB_CLASS = { "Run": "g-run", "Control room": "g-app", "Pipeline": "g-src", "Tests": "g-test", "SQL": "g-sql" };
+const CB_GROUPS = ["Run", "Control room", "Pipeline", "SQL"];
+//groups listed on the left; the control room files are only shown on the map
+const CB_LIST = ["Run", "Pipeline", "SQL"];
+const CB_CLASS = { "Run": "g-run", "Control room": "g-app", "Pipeline": "g-src", "SQL": "g-sql" };
 async function loadCode() {
   if (CB.files.length) { drawCodeMap(); return; }
   let d;
@@ -761,12 +763,10 @@ async function loadCode() {
     return;
   }
   CB.files = d.files; CB.root = d.root;
-  //the show-tests switch only makes sense when the test files are there (they are not in the submission)
-  $("#cbTests").closest("label").hidden = !d.files.some(f => f.group === "Tests");
   $("#cbRoot").textContent = d.root;
   $("#cbLegend").innerHTML = CB_GROUPS.filter(g => d.files.some(f => f.group === g))
     .map(g => `<span class="cb-key ${CB_CLASS[g]}">${g}</span>`).join("");
-  $("#cbList").innerHTML = CB_GROUPS.map(g => {
+  $("#cbList").innerHTML = CB_LIST.map(g => {
     const fs = d.files.filter(f => f.group === g);
     if (!fs.length) return "";
     return `<div class="cb-grp">${g}</div>` + fs.map(f =>
@@ -778,8 +778,7 @@ async function loadCode() {
 }
 //lays the files out in columns: a file sits one column to the right of every file that uses it
 function drawCodeMap() {
-  const showTests = $("#cbTests").checked;
-  const files = CB.files.filter(f => showTests || f.group !== "Tests");
+  const files = CB.files;
   const ids = new Set(files.map(f => f.id));
   const depth = {};
   const deep = (f, seen) => {
@@ -852,7 +851,6 @@ document.addEventListener("click", e => {
   const b = e.target.closest("#p-code [data-id]");
   if (b) openCode(+b.dataset.id);
 });
-$("#cbTests").addEventListener("change", drawCodeMap);
 async function openFolder(id) {
   const r = await fetch("/api/code/open", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) }).then(x => x.json()).catch(() => null);
   if (!r || !r.ok) toast("Could not open the folder. Path: " + (r ? r.path : CB.root));

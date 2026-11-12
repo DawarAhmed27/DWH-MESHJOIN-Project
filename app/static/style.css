@@ -401,7 +401,6 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--hair-2)
 .cb-panel { padding: 0; overflow: hidden; }
 .cb-title { font-weight: 600; font-size: var(--t-md); }
 .cb-panel .bro-bar .note { color: var(--ink-3); font-size: var(--t-xs); margin-right: auto; }
-.cb-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink-2); white-space: nowrap; }
 .cb-legend { display: flex; flex-wrap: wrap; gap: var(--s2); padding: var(--s2) var(--s4) 0; }
 .cb-key { font-size: var(--t-xs); padding: 2px 8px; border-radius: 99px; border: 1px solid; }
 .cb-mapwrap { overflow-x: auto; padding: var(--s2) var(--s4); }
@@ -419,7 +418,6 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--hair-2)
 .g-run  { background: #F2F2F2; border-color: #9A9A9A; color: #333; }
 .g-app  { background: #EDE4F6; border-color: #8E5DB8; color: #3A1758; }
 .g-src  { background: #E2F0D9; border-color: #6C9A52; color: #233D14; }
-.g-test { background: #E8F1F8; border-color: #7EA4C4; color: #1F3A52; }
 .g-sql  { background: #FFF2CC; border-color: #C9A227; color: #4A3800; }
 .cb-main { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--s4); align-items: start; }
 .cb-list { padding: var(--s2); max-height: calc(100vh - 140px); overflow: auto; position: sticky; top: var(--s4); }
