@@ -58,7 +58,8 @@ def main():
     put(first("requirements.txt"), "Mesh-Join/requirements.txt")
     put(first("Start Control Room.bat"), "Mesh-Join/Start Control Room.bat", required=False)
 
-    #4. Data: the three files written by main.py and the data note
+    #4. Data: the source file (so the zip runs straight away), the three files written by main.py and the data note
+    put(first("Online Retail.xlsx", "data/Online Retail.xlsx"), "Data/Online Retail.xlsx")
     for n in ("online_sales_stream.csv", "customer_master_data.csv", "product_master_data.csv"):
         put(first(n, "data/" + n), "Data/" + n)
     put(first("data/Data_Note.txt", "Data_Note.txt"), "Data/Data_Note.txt")

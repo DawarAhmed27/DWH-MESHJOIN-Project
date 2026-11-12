@@ -14,7 +14,7 @@ threads (with load shedding and live commands) and loads the result into a MySQL
 | `Create-DW/` | `Create-DW.sql`: removes any pre-existing schema and creates the star schema |
 | `Mesh-Join/` | the Python project (`src/`), the optional web control room (`app/`), `requirements.txt` and `Start Control Room.bat` |
 | `Queries-DW/` | `Queries-DW.sql`: the 20 OLAP queries, the view and the materialized view |
-| `Data/` | `online_sales_stream.csv`, `customer_master_data.csv`, `product_master_data.csv` and `Data_Note.txt` |
+| `Data/` | `Online Retail.xlsx` (the source file), `online_sales_stream.csv`, `customer_master_data.csv`, `product_master_data.csv` and `Data_Note.txt` |
 | `Project-Report/` | the report (Word and PDF) and its figures |
 | `ReadMe/` | this file |
 
@@ -38,8 +38,8 @@ Downloaded on **3 November 2026** (file `Online Retail.xlsx`, 541,909 rows).
   pip install -r requirements.txt
   ```
   (pandas, openpyxl, mysql-connector-python, and flask for the optional control room)
-- `Online Retail.xlsx`, downloaded from the link above. It is not in the zip because of its size:
-  put it in the `Data` folder, or type its path when the program asks for it.
+- `Online Retail.xlsx`, the source file. It is included in the `Data` folder of the submission, and the
+  program finds it there; another location can be typed when the program asks for the path.
 
 ## Files of the Python project
 
