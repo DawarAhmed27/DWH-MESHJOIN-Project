@@ -90,12 +90,16 @@ From the `Mesh-Join` folder:
 python src/main.py
 ```
 
-The program prints its settings, then the default connection (localhost, port 3306, database
-`dwh_project`, user root) and the path of the transactional file:
+The program prints its settings, then asks for the connection details and the file paths one by one.
+Press **Enter** to keep the value shown in brackets:
 
-- press **Enter** to use them, or type **c** to change any of them (host, port, database, user, file
-  path; a folder path is accepted);
-- type the **MySQL password** (hidden, never stored).
+| Question | Default |
+|---|---|
+| Host, Port | localhost, 3306 |
+| Database name, User name | dwh_project, root |
+| Password | typed hidden, never stored |
+| Path of the transactional file | `Online Retail.xlsx` (in the `Data` folder or the project folder; a folder path is accepted) |
+| Path of the online file | `online_sales_stream.csv` next to the transactional file; the program writes it and the OnlineThread reads it |
 
 Settings can be given on the command line (defaults are the project settings):
 

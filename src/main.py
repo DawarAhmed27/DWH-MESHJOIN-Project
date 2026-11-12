@@ -80,26 +80,26 @@ def main():
     print("=" * 60)
     print_settings(cfg)
 
-    #1. connection details and file path (password is never stored)
-    host, port, database, user = "localhost", 3306, "dwh_project", "root"
-    data_file = default_data_file()
-    print("\nConnection settings:")
-    print(f"  Host: {host}   Port: {port}   Database: {database}   User: {user}")
-    print(f"  Transactional file: {data_file}")
-    if input("Press Enter to use these, or type c to change them: ").strip().lower() == "c":
-        host     = ask("Host", host)
-        port     = int(ask("Port", str(port)))
-        database = ask("Database name", database)
-        user     = ask("User name", user)
-        data_file = ask("Path of the transactional file", data_file)
+    #1. connection details and file paths, asked at startup (PDF 6); Enter keeps the value in brackets
+    print("\nConnection details (press Enter to keep the value in brackets):")
+    host     = ask("Host", "localhost")
+    port     = int(ask("Port", "3306"))
+    database = ask("Database name", "dwh_project")
+    user     = ask("User name", "root")
     #the password is typed hidden and kept only in memory
-    password = getpass("MySQL password: ")
+    password = getpass("Password: ")
 
+    data_file = ask("Path of the transactional file (Online Retail.xlsx)", default_data_file())
     if os.path.isdir(data_file):   #a folder was given: look for the file inside it
         data_file = os.path.join(data_file, "Online Retail.xlsx")
     if not os.path.exists(data_file):
         sys.exit(f"File not found: {data_file}")
     out_dir = os.path.dirname(os.path.abspath(data_file))
+
+    #the online file is written by the preparation and read by the OnlineThread
+    online_file = ask("Path of the online file", os.path.join(out_dir, "online_sales_stream.csv"))
+    if os.path.isdir(online_file):
+        online_file = os.path.join(online_file, "online_sales_stream.csv")
 
     #connect, or stop with a clear message
     try:
@@ -134,7 +134,6 @@ def main():
     #6. online file and the 48 periodic groups
     print("\n--- Working data ---")
     online = working_data.build_online(df)
-    online_file = os.path.join(out_dir, "online_sales_stream.csv")
     online.to_csv(online_file, index=False)
     periodic = working_data.build_periodic(df)
     t_stage = time.time()
