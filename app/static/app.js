@@ -78,7 +78,12 @@ function go(page) {
 }
 /* ================= report: PDF preview ================= */
 async function loadReports() {
-  const files = await api("/api/reports").catch(() => []);
+  let files = [], old = false;
+  try { files = await api("/api/reports"); } catch (e) { old = true; }
+  //an app started before the Report page existed has no /api/reports: ask for a restart
+  $("#repEmpty").innerHTML = old
+    ? "The running app was started before the Report page was added. Close it and start it again with <b>Start Control Room.bat</b>, then open this page."
+    : "No PDF in the report folder yet. In Word, use File → Save As → PDF and save it in the <span class=\"mono\">report</span> folder (or <span class=\"mono\">Project-Report</span> in the submission), then press Refresh.";
   const sel = $("#repFile"), keep = sel.value;
   sel.innerHTML = files.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join("");
   $("#repEmpty").hidden = files.length > 0;
