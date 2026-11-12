@@ -59,7 +59,7 @@ const PAGES = {
   analysis: ["Analysis", "Queries-DW.sql"],
   checks: ["Checks", "The load against the working data"],
   report: ["Report", "The project report, read from the report folder"],
-  code: ["Codebase", "Every code file, how they connect and what is inside"],
+  code: ["Codebase", "The project files, how they connect and what is inside"],
 };
 function go(page) {
   $$(".page").forEach(p => p.classList.toggle("on", p.id === "p-" + page));
@@ -750,10 +750,8 @@ loop();
 
 /* ================= codebase: file map + code viewer ================= */
 const CB = { files: [], cur: null, root: "" };
-const CB_GROUPS = ["Run", "Control room", "Pipeline", "SQL"];
-//groups listed on the left; the control room files are only shown on the map
-const CB_LIST = ["Run", "Pipeline", "SQL"];
-const CB_CLASS = { "Run": "g-run", "Control room": "g-app", "Pipeline": "g-src", "SQL": "g-sql" };
+const CB_GROUPS = ["ReadMe", "Pipeline", "SQL"];
+const CB_CLASS = { "ReadMe": "g-run", "Pipeline": "g-src", "SQL": "g-sql" };
 async function loadCode() {
   if (CB.files.length) { drawCodeMap(); return; }
   let d;
@@ -766,7 +764,7 @@ async function loadCode() {
   $("#cbRoot").textContent = d.root;
   $("#cbLegend").innerHTML = CB_GROUPS.filter(g => d.files.some(f => f.group === g))
     .map(g => `<span class="cb-key ${CB_CLASS[g]}">${g}</span>`).join("");
-  $("#cbList").innerHTML = CB_LIST.map(g => {
+  $("#cbList").innerHTML = CB_GROUPS.map(g => {
     const fs = d.files.filter(f => f.group === g);
     if (!fs.length) return "";
     return `<div class="cb-grp">${g}</div>` + fs.map(f =>

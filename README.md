@@ -178,7 +178,7 @@ time). The browser opens http://localhost:5000. The pages follow the project:
 | Analysis | every statement of `Queries-DW.sql` with its explanation, SQL, result table, chart and time |
 | Checks | the checks after a load: counts, revenue, enrichment against the Master Data, MD5 rules |
 | Report | the project report PDF from the `Project-Report` folder |
-| Codebase | a map of how the code files use each other, every file with its code, and buttons to open the project folder |
+| Codebase | a map of how the program files and SQL scripts use each other, each file with its code, and buttons to open the project folder |
 
 "Presenter mode" opens step-by-step demo notes (what to show, what to say) with buttons that run each step;
 the arrow keys move between steps. The command-line program (`src/main.py`) is unchanged and still works on its own.

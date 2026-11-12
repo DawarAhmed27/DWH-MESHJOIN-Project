@@ -416,7 +416,6 @@ kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--hair-2)
 .cb-root { padding: 0 var(--s4) var(--s3); font-size: var(--t-xs); color: var(--ink-3); word-break: break-all; }
 /* group colours: same five used in the map, the list and the chips */
 .g-run  { background: #F2F2F2; border-color: #9A9A9A; color: #333; }
-.g-app  { background: #EDE4F6; border-color: #8E5DB8; color: #3A1758; }
 .g-src  { background: #E2F0D9; border-color: #6C9A52; color: #233D14; }
 .g-sql  { background: #FFF2CC; border-color: #C9A227; color: #4A3800; }
 .cb-main { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: var(--s4); align-items: start; }

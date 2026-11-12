@@ -306,7 +306,7 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
-#Codebase page: every code file of the project, what it does and which files it uses
+#Codebase page: the required project files, what each does and which files it uses
 def code_files():
     files = []
 
@@ -316,13 +316,8 @@ def code_files():
 
     src = os.path.join(PROJECT_DIR, "src")
     mods = sorted(f for f in os.listdir(src) if f.endswith(".py")) if os.path.isdir(src) else []
-    add("Run", db.find_file(PROJECT_DIR, "Start Control Room.bat", "."))
-    add("Run", db.find_file(PROJECT_DIR, "requirements.txt", "."))
-    add("Run", db.find_file(PROJECT_DIR, "README.md", ".", "../ReadMe"))
-    add("Control room", os.path.join(APP_DIR, "server.py"))
-    static = os.path.join(APP_DIR, "static")
-    for name in ("index.html", "app.js", "style.css", "sims.js", "sims.css"):
-        add("Control room", os.path.join(static, name))
+    #only the files the project asks for: the Python program, the two SQL scripts and the ReadMe
+    add("ReadMe", db.find_file(PROJECT_DIR, "README.md", ".", "../ReadMe"))
     for f in mods:
         if not f.startswith("test_"):
             add("Pipeline", os.path.join(src, f))
