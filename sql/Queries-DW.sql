@@ -307,10 +307,32 @@ JOIN dim_product pb ON pb.product_key = pairs.key_b
 ORDER BY pairs.carts_together DESC, product_a, product_b;
 
 
--- Q17. Revenue for 2011 by store, supplier and product with ROLLUP:
+-- Q17a. Revenue for 2011 by store and supplier with ROLLUP (summary rows only):
+-- supplier subtotals, store subtotals and the grand total.
+-- The 2011 totals per supplier in each store, per store and for the whole year, without the product rows.
+-- Runs the full ROLLUP of Q17b inside a subquery and keeps only the rows that GROUPING() labelled as subtotals.
+SELECT * FROM (
+  SELECT CASE WHEN GROUPING(s.store_name) = 1     THEN 'Grand total'
+              WHEN GROUPING(su.supplier_name) = 1 THEN 'Store subtotal'
+              WHEN GROUPING(p.product_name) = 1   THEN 'Supplier subtotal'
+              ELSE 'Product' END AS row_type,
+         s.store_name, su.supplier_name, p.product_name,
+         SUM(f.revenue) AS revenue_2011
+  FROM fact_sales f
+  JOIN dim_store s     ON s.store_key = f.store_key
+  JOIN dim_supplier su ON su.supplier_key = f.supplier_key
+  JOIN dim_product p   ON p.product_key = f.product_key
+  JOIN dim_time t      ON t.time_key = f.time_key
+  WHERE t.year = 2011
+  GROUP BY s.store_name, su.supplier_name, p.product_name WITH ROLLUP
+) r
+WHERE row_type <> 'Product';
+
+
+-- Q17b. Revenue for 2011 by store, supplier and product with ROLLUP (all rows):
 -- product rows, supplier subtotals, store subtotals and the grand total.
 -- 2011 revenue by store, supplier and product, with supplier and store subtotals and a grand total.
--- Groups by store, supplier and product WITH ROLLUP for the subtotals; GROUPING() labels the subtotal rows.
+-- Groups by store, supplier and product WITH ROLLUP; each subtotal comes right after its group and the grand total is the last row.
 SELECT CASE WHEN GROUPING(s.store_name) = 1     THEN 'Grand total'
             WHEN GROUPING(su.supplier_name) = 1 THEN 'Store subtotal'
             WHEN GROUPING(p.product_name) = 1   THEN 'Supplier subtotal'

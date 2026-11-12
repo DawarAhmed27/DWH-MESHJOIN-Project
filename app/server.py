@@ -489,7 +489,7 @@ def read_queries():
     for line in text.splitlines():
         if line.startswith("--") and not lines:
             c = line[2:].strip()
-            if re.match(r"(Q\d+\.|Check|Materialized)", c):
+            if re.match(r"(Q\d+[a-z]?\.|Check|Materialized)", c):
                 title, notes = c, []
             elif title and c:
                 notes.append(c)
@@ -497,8 +497,9 @@ def read_queries():
         if line.strip():
             lines.append(line)
             if line.rstrip().endswith(";"):
-                m = re.match(r"Q(\d+)\.", title)
-                items.append({"id": len(items), "q": int(m.group(1)) if m else None, "title": title,
+                m = re.match(r"Q(\d+)([a-z]?)\.", title)
+                items.append({"id": len(items), "q": int(m.group(1)) if m else None,
+                              "part": m.group(2) if m else "", "title": title,
                               "notes": list(notes), "sql": "\n".join(lines).strip().rstrip(";")})
                 lines = []
     return items

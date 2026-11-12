@@ -474,22 +474,22 @@ let QUERIES = [], GROUPS = [], CUR = null, LAST = null;
 const QKIND = {
   1: "Slice · drill-down · top-N", 2: "Dice", 3: "Group", 4: "Slice · drill-down", 5: "Top-N", 6: "Dice · drill-down", 7: "Average",
   8: "Rank", 9: "Slice · growth", 10: "Slice", 11: "Slice · drill-down · top-N", 12: "Slice · growth", 13: "Share of total",
-  14: "Drill-down", 15: "Volatility", 16: "Shopping cart", 17: "ROLLUP", 18: "Slice · drill-down", 19: "Spikes", 20: "View",
+  14: "Drill-down", 15: "Volatility", 16: "Shopping cart", 17: "ROLLUP", "17a": "ROLLUP · subtotals only", "17b": "ROLLUP · all rows", 18: "Slice · drill-down", 19: "Spikes", 20: "View",
 };
 async function loadQueries() {
   QUERIES = await api("/api/queries");
   GROUPS = [];
   for (const q of QUERIES) {
-    const key = q.q !== null ? "Q" + q.q : q.title;
+    const key = q.q !== null ? "Q" + q.q + (q.part || "") : q.title;
     let g = GROUPS.find(x => x.key === key);
-    if (!g) GROUPS.push(g = { key, q: q.q, title: q.title, notes: [], ids: [], sql: [] });
+    if (!g) GROUPS.push(g = { key, q: q.q, part: q.part || "", title: q.title, notes: [], ids: [], sql: [] });
     g.ids.push(q.id); g.sql.push(q.sql); g.notes.push(...q.notes.filter(n => !g.notes.includes(n)));
   }
   $("#qlist").innerHTML = GROUPS.map((g, i) => {
     const mv = g.title.startsWith("Materialized");
-    const label = g.q ? "Q" + g.q : (mv ? "MV" : "D");
-    const kind = g.q ? QKIND[g.q] : (mv ? "Materialized view" : "Loaded dates");
-    return `<button class="qitem" role="option" data-i="${i}"><span class="qn">${label}</span><span><span class="qt">${esc(g.title.replace(/^Q\d+\.\s*/, ""))}</span><span class="qk">${kind}</span></span></button>`;
+    const label = g.q ? "Q" + g.q + g.part : (mv ? "MV" : "D");
+    const kind = g.q ? QKIND[g.q + g.part] || QKIND[g.q] : (mv ? "Materialized view" : "Loaded dates");
+    return `<button class="qitem" role="option" data-i="${i}"><span class="qn">${label}</span><span><span class="qt">${esc(g.title.replace(/^Q\d+[a-z]?\.\s*/, ""))}</span><span class="qk">${kind}</span></span></button>`;
   }).join("");
   $$("#qlist .qitem").forEach(b => b.addEventListener("click", () => pickQuery(+b.dataset.i)));
   pickQuery(Math.max(0, GROUPS.findIndex(g => g.q === 1)));
@@ -502,14 +502,14 @@ function pickQuery(i) {
   CUR = GROUPS[i];
   $$("#qlist .qitem").forEach((b, j) => { b.classList.toggle("on", j === i); b.setAttribute("aria-selected", j === i); });
   const mv = CUR.title.startsWith("Materialized");
-  $("#q-num").textContent = CUR.q ? `Q${CUR.q} · ${QKIND[CUR.q]}` : (mv ? "Materialized view" : "Loaded dates");
+  $("#q-num").textContent = CUR.q ? `Q${CUR.q}${CUR.part} · ${QKIND[CUR.q + CUR.part] || QKIND[CUR.q]}` : (mv ? "Materialized view" : "Loaded dates");
   // titles that run over two comment lines continue in the first note
   // the last two comment lines of every query: what it shows, then how it is written
   const two = CUR.notes.length >= 2 ? CUR.notes.slice(-2) : [], one = two[0], how = two[1];
   $("#q-explain").hidden = !two.length;
   $("#q-one").textContent = one || "";
   $("#q-how").textContent = how || "";
-  let title = CUR.title.replace(/^Q\d+\.\s*/, ""), notes = CUR.notes.slice(0, two.length ? -2 : undefined);
+  let title = CUR.title.replace(/^Q\d+[a-z]?\.\s*/, ""), notes = CUR.notes.slice(0, two.length ? -2 : undefined);
   while (notes.length && /[,(]$|\b(by|for|and|the|of|per|than|twice)$/i.test(title.trim())) title += " " + notes.shift();
   $("#q-title").textContent = title;
   $("#q-notes").textContent = notes.join(" ");
