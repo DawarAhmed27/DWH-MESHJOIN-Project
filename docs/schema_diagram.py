@@ -116,7 +116,7 @@ def html():
     view = (f'<div class="vw" style="left:{vx}px;top:{vy}px;width:{W_BOX}px">'
             f'<span class="ti">&#9638;</span>{VIEW[0]} <i>(view)</i></div>')
     return f"""<!doctype html><html><head><meta charset="utf-8"><style>
-body{{margin:0;background:#fff;font-family:Tahoma,Verdana,"DejaVu Sans",sans-serif}}
+body{{margin:0;background:#fff;font-family:"Times New Roman",Times,serif}}
 #c{{position:relative;width:1500px;height:900px;background:#fff}}
 .band{{position:absolute;left:20px;top:600px;width:1460px;height:285px;border:1px dashed #9AA9BA;border-radius:6px;background:#FAFBFD}}
 .lab{{position:absolute;font-size:13px;font-weight:bold;color:#3B4A5C}}
