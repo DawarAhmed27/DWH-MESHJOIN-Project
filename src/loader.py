@@ -36,7 +36,7 @@ from consolidation import consolidate
 #online batch: up to 1,000 rows or 0.5 seconds, whichever comes first
 BATCH_ROWS = 1000
 BATCH_SECONDS = 0.5
-#bonus: in non-peak the cache is copied into the DW in chunks of 5,000 rows, one chunk per loop,
+#BONUS: in non-peak the cache is copied into the DW in chunks of 5,000 rows, one chunk per loop,
 #so the loader keeps taking new sales between chunks and no transaction gets too big for MySQL
 CACHE_CHUNK = 5000
 CACHE_SECONDS = 1.0
@@ -72,6 +72,7 @@ class LoaderThread(threading.Thread):
         self.keys = {name: {} for name in DIMENSIONS}   #id -> surrogate key, per dimension
         self.received = 0
         self.loaded = 0                                  #fact rows committed
+        #BONUS: counters for the cache, shown by status
         self.cached = 0                                  #Live rows written to live_cache
         self.in_cache = 0                                #Live rows still waiting in live_cache
         self.cache_copies = []                           #(copy number, rows copied to the DW)
@@ -86,7 +87,7 @@ class LoaderThread(threading.Thread):
         batch = []                          #online sales, loaded at once
         last_flush = time.time()
         next_hour = time.time() + self.settings.hour_seconds
-        next_copy = time.time()
+        next_copy = time.time()             #BONUS: when the next cache copy may run
         while not self.stop_event.is_set() or not self.output.empty():
             try:
                 #take the finished sales: online to the batch, periodic to the waiting list
@@ -113,7 +114,7 @@ class LoaderThread(threading.Thread):
             if time.time() >= next_hour:    #hour tick: load the periodic sales together
                 self.load_waiting(conn)
                 next_hour += self.settings.hour_seconds
-            #bonus: in a slow period (non-peak) copy the cached Live rows into the DW
+            #BONUS: in a slow period (non-peak) copy the cached Live rows into the DW
             if self.in_cache and self.settings.mode == "non-peak" and time.time() >= next_copy:
                 self.copy_cache(conn)
                 #while the cache still holds rows, copy the next chunk on the next loop
@@ -121,12 +122,13 @@ class LoaderThread(threading.Thread):
         if batch:                           #quit: load what is left
             self.load(conn, batch)
         self.load_waiting(conn)
+        #BONUS: quit in non-peak copies what is left; quit in peak leaves the rows safe in live_cache
         while self.in_cache and self.settings.mode == "non-peak":
-            if not self.copy_cache(conn):   #quit in peak: the cached rows stay safe in live_cache
+            if not self.copy_cache(conn):
                 break
         conn.close()
 
-    #bonus: the oldest chunk of cached Live rows -> fact_sales, then delete them from the cache, in one commit
+    #BONUS: the oldest chunk of cached Live rows -> fact_sales, then delete them from the cache, in one commit
     def copy_cache(self, conn):
         cols = ", ".join(FACT_COLUMNS)
         cur = conn.cursor()
@@ -138,10 +140,13 @@ class LoaderThread(threading.Thread):
             if last is None:
                 self.in_cache = 0
                 return False
+            #BONUS: copy the chunk into the DW
             cur.execute(f"INSERT INTO fact_sales ({cols}) SELECT {cols} FROM live_cache "
                         f"WHERE cache_id <= %s ORDER BY cache_id", (last,))
             copied = cur.rowcount
+            #BONUS: then delete the copied rows from the cache
             cur.execute("DELETE FROM live_cache WHERE cache_id <= %s", (last,))
+            #BONUS: copy and delete in one commit, so a row is never in both tables or in neither
             conn.commit()
         except Exception as e:
             #undo this chunk; the rows stay in the cache and the next loop tries again
@@ -189,7 +194,8 @@ class LoaderThread(threading.Thread):
             for name, row in dims.items():                       #1. dimensions first
                 fact[DIMENSIONS[name][2]] = self.dimension_key(cur, name, row)
             facts.append([fact[c] for c in FACT_COLUMNS])
-        #2. then the facts: Live results go to the cache (bonus), the rest straight into fact_sales
+        #2. then the facts
+        #BONUS: Live rows go to live_cache, Periodic and Shed rows go straight into fact_sales
         live = [f for f in facts if f[FACT_COLUMNS.index("processing_mode")] == "Live"]
         rest = [f for f in facts if f[FACT_COLUMNS.index("processing_mode")] != "Live"]
         if live:
@@ -198,6 +204,7 @@ class LoaderThread(threading.Thread):
             cur.executemany(insert_sql("fact_sales", FACT_COLUMNS), rest)
         conn.commit()                                            #3. all in one commit
         cur.close()
+        #BONUS: Live rows are counted as cached, not loaded, until they are copied
         self.cached += len(live)
         self.in_cache += len(live)
         self.loaded += len(rest)

@@ -373,7 +373,7 @@ function renderLive(s) {
   $("#d-wait").textContent = fmt(lo.waiting);
   const mx = Math.max(...lo.hourly.map(h => h[1]), 1);
   $("#d-ticks").innerHTML = lo.hourly.map(h => `<i style="height:${Math.max(6, pct(h[1], mx))}%" title="Hour tick ${h[0]}: ${fmt(h[1])} rows"></i>`).join("");
-  //bonus: Live rows wait in live_cache until non-peak copies them into the DW
+  //BONUS: Live rows wait in live_cache until non-peak copies them into the DW
   $("#d-cache").textContent = `Live in cache: ${fmt(lo.in_cache || 0)} \u00b7 copied to the DW: ${fmt((lo.cached || 0) - (lo.in_cache || 0))}`;
   const bm = lo.by_mode;
   $("#d-modes").innerHTML = [["Live", C.online], ["Periodic", C.periodic], ["Shed", C.shed]].map(([k, c]) =>

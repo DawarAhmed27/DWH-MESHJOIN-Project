@@ -184,6 +184,7 @@ def print_status(s, buffer, mesh, online, periodic, loader, conn):
     print(f"Read back from shed (non-peak): {mesh.read_back:,}")
     print(f"Online sent: {online.sent:,}   Periodic groups released: {len(periodic.log)} / 48")
     print(f"Out of MESHJOIN: {loader.received:,}   by processing mode: {dict(loader.by_processing_mode)}")
+    #BONUS: how many Live rows wait in the cache and how many were copied to the DW
     print(f"Live rows in the cache: {loader.in_cache:,}   "
           f"copied to the DW in non-peak: {loader.cached - loader.in_cache:,} in {len(loader.cache_copies)} copies")
     print(f"Loaded into the DW: {loader.loaded:,} fact rows   "
@@ -267,6 +268,7 @@ def run_threads(cfg, db_params, online_file, expected):
     print("Rows per store:", dict(sorted(loader.stores.items())))
     print(f"Shed in peak: online {online.shed_online:,}, periodic {online.shed_periodic + periodic.shed:,}")
     print(f"Read back from shed (non-peak): {mesh.read_back:,}")
+    #BONUS: rows left in the cache when the program stops
     print(f"Live rows still in the cache: {loader.in_cache:,} (copied to the DW in non-peak: {loader.cached - loader.in_cache:,})")
     print(f"Loaded into the DW: {loader.loaded:,} fact rows")
 

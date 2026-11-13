@@ -7,7 +7,7 @@ SET NAMES utf8mb4;
 DROP VIEW  IF EXISTS STORE_QUARTERLY_SALES;
 DROP TABLE IF EXISTS MV_STORE_QUARTERLY_SALES;
 
-DROP TABLE IF EXISTS live_cache;
+DROP TABLE IF EXISTS live_cache;          -- BONUS: the cache table
 DROP TABLE IF EXISTS fact_sales;
 DROP TABLE IF EXISTS dim_customer;
 DROP TABLE IF EXISTS dim_product;
@@ -179,7 +179,7 @@ CREATE TABLE fact_sales (
     CONSTRAINT chk_processing_mode CHECK (processing_mode IN ('Live', 'Periodic', 'Shed'))
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
 
--- Bonus: Live results wait here first and are copied into fact_sales in a slow period (non-peak)
+-- BONUS: Live results wait here first and are copied into fact_sales in a slow period (non-peak)
 CREATE TABLE live_cache (
     cache_id         BIGINT         NOT NULL AUTO_INCREMENT,
     transaction_id   VARCHAR(10)    NOT NULL,
