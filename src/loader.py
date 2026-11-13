@@ -89,15 +89,22 @@ class LoaderThread(threading.Thread):
         next_copy = time.time()
         while not self.stop_event.is_set() or not self.output.empty():
             try:
-                #take the next finished sale: online to the batch, periodic to the waiting list
-                t = self.output.get(timeout=0.1)
+                #take the finished sales: online to the batch, periodic to the waiting list
+                #(up to 1,000 at once, so a cache copy never leaves sales piling up in the queue)
+                items = [self.output.get(timeout=0.1)]
+                while len(items) < BATCH_ROWS:
+                    try:
+                        items.append(self.output.get_nowait())
+                    except queue.Empty:
+                        break
+            except queue.Empty:
+                items = []
+            for t in items:
                 self.count(t)
                 if t["sales_mode"] == "Online":
                     batch.append(t)
                 else:
-                    self.waiting.append(t)  #periodic: wait for the hour
-            except queue.Empty:
-                pass
+                    self.waiting.append(t)      #periodic: wait for the hour
             #load the online batch when it has 1,000 rows or 0.5 s has passed
             if batch and (len(batch) >= BATCH_ROWS or time.time() - last_flush >= BATCH_SECONDS):
                 self.load(conn, batch)
