@@ -5,7 +5,8 @@ prepare the Master Data, load it, write the online file and load the 48
 periodic groups into the staging table.
 Phase 7: start the OnlineThread, PeriodicThread and MeshJoinThread.
 Phase 8: accept commands while the threads run (type help for the list).
-Phase 9: the LoaderThread loads every finished transaction into the DW.
+Phase 9: the LoaderThread loads every finished transaction into the DW
+(bonus: Live results go through the live_cache table, copied in non-peak).
 
 Run:  python src/main.py   [--peak 80] [--nonpeak 10] [--hour 60] [--mode peak]
 """
@@ -183,6 +184,8 @@ def print_status(s, buffer, mesh, online, periodic, loader, conn):
     print(f"Read back from shed (non-peak): {mesh.read_back:,}")
     print(f"Online sent: {online.sent:,}   Periodic groups released: {len(periodic.log)} / 48")
     print(f"Out of MESHJOIN: {loader.received:,}   by processing mode: {dict(loader.by_processing_mode)}")
+    print(f"Live rows in the cache: {loader.in_cache:,}   "
+          f"copied to the DW in non-peak: {loader.cached - loader.in_cache:,} in {len(loader.cache_copies)} copies")
     print(f"Loaded into the DW: {loader.loaded:,} fact rows   "
           f"periodic waiting for the hour: {len(loader.waiting):,}   "
           f"hourly loads: {len(loader.hourly_loads)} (last {loader.hourly_loads[-1][1] if loader.hourly_loads else 0:,} rows)")
@@ -264,6 +267,7 @@ def run_threads(cfg, db_params, online_file, expected):
     print("Rows per store:", dict(sorted(loader.stores.items())))
     print(f"Shed in peak: online {online.shed_online:,}, periodic {online.shed_periodic + periodic.shed:,}")
     print(f"Read back from shed (non-peak): {mesh.read_back:,}")
+    print(f"Live rows still in the cache: {loader.in_cache:,} (copied to the DW in non-peak: {loader.cached - loader.in_cache:,})")
     print(f"Loaded into the DW: {loader.loaded:,} fact rows")
 
 

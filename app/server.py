@@ -284,7 +284,7 @@ class Engine:
             "loader": {"received": lo.received, "loaded": loaded, "waiting": len(lo.waiting),
                        "hourly": lo.hourly_loads[-12:], "hourly_count": len(lo.hourly_loads),
                        "by_mode": dict(lo.by_processing_mode), "stores": {str(k): v for k, v in sorted(lo.stores.items())},
-                       "unmatched": lo.unmatched},
+                       "unmatched": lo.unmatched, "in_cache": lo.in_cache, "cached": lo.cached},
             "done": t["done_at"] is not None,
         }
         return out

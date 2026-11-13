@@ -7,6 +7,7 @@ SET NAMES utf8mb4;
 DROP VIEW  IF EXISTS STORE_QUARTERLY_SALES;
 DROP TABLE IF EXISTS MV_STORE_QUARTERLY_SALES;
 
+DROP TABLE IF EXISTS live_cache;
 DROP TABLE IF EXISTS fact_sales;
 DROP TABLE IF EXISTS dim_customer;
 DROP TABLE IF EXISTS dim_product;
@@ -176,4 +177,26 @@ CREATE TABLE fact_sales (
     CONSTRAINT fk_fact_time     FOREIGN KEY (time_key)     REFERENCES dim_time     (time_key),
     CONSTRAINT chk_sales_mode      CHECK (sales_mode IN ('Online', 'Periodic')),
     CONSTRAINT chk_processing_mode CHECK (processing_mode IN ('Live', 'Periodic', 'Shed'))
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
+
+-- Bonus: Live results wait here first and are copied into fact_sales in a slow period (non-peak)
+CREATE TABLE live_cache (
+    cache_id         BIGINT         NOT NULL AUTO_INCREMENT,
+    transaction_id   VARCHAR(10)    NOT NULL,
+    customer_key     INT            NOT NULL,
+    product_key      INT            NOT NULL,
+    supplier_key     INT            NOT NULL,
+    store_key        INT            NOT NULL,
+    time_key         BIGINT         NOT NULL,
+    quantity         INT            NOT NULL,
+    revenue          DECIMAL(14,3)  NOT NULL,
+    sales_mode       VARCHAR(8)     NOT NULL,
+    processing_mode  VARCHAR(8)     NOT NULL,
+    cached_at        TIMESTAMP      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (cache_id),
+    CONSTRAINT fk_cache_customer FOREIGN KEY (customer_key) REFERENCES dim_customer (customer_key),
+    CONSTRAINT fk_cache_product  FOREIGN KEY (product_key)  REFERENCES dim_product  (product_key),
+    CONSTRAINT fk_cache_supplier FOREIGN KEY (supplier_key) REFERENCES dim_supplier (supplier_key),
+    CONSTRAINT fk_cache_store    FOREIGN KEY (store_key)    REFERENCES dim_store    (store_key),
+    CONSTRAINT fk_cache_time     FOREIGN KEY (time_key)     REFERENCES dim_time     (time_key)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4;
