@@ -36,7 +36,9 @@ from consolidation import consolidate
 #online batch: up to 1,000 rows or 0.5 seconds, whichever comes first
 BATCH_ROWS = 1000
 BATCH_SECONDS = 0.5
-#bonus: in non-peak the cache is copied into the DW at most once a second
+#bonus: in non-peak the cache is copied into the DW in chunks of 5,000 rows, one chunk per loop,
+#so the loader keeps taking new sales between chunks and no transaction gets too big for MySQL
+CACHE_CHUNK = 5000
 CACHE_SECONDS = 1.0
 
 #dimension -> (table, id column, key column); time uses time_key as both
@@ -107,33 +109,44 @@ class LoaderThread(threading.Thread):
             #bonus: in a slow period (non-peak) copy the cached Live rows into the DW
             if self.in_cache and self.settings.mode == "non-peak" and time.time() >= next_copy:
                 self.copy_cache(conn)
-                next_copy = time.time() + CACHE_SECONDS
+                #while the cache still holds rows, copy the next chunk on the next loop
+                next_copy = time.time() + (0 if self.in_cache else CACHE_SECONDS)
         if batch:                           #quit: load what is left
             self.load(conn, batch)
         self.load_waiting(conn)
-        if self.in_cache and self.settings.mode == "non-peak":
-            self.copy_cache(conn)           #quit in peak: the cached rows stay safe in live_cache
+        while self.in_cache and self.settings.mode == "non-peak":
+            if not self.copy_cache(conn):   #quit in peak: the cached rows stay safe in live_cache
+                break
         conn.close()
 
-    #bonus: cached Live rows -> fact_sales, then delete them from the cache, in one commit
+    #bonus: the oldest chunk of cached Live rows -> fact_sales, then delete them from the cache, in one commit
     def copy_cache(self, conn):
         cols = ", ".join(FACT_COLUMNS)
         cur = conn.cursor()
-        cur.execute("SELECT MAX(cache_id) FROM live_cache")
-        last = cur.fetchone()[0]
-        if last is None:
+        try:
+            #the last cache_id of the oldest chunk (or of the whole cache when it is smaller)
+            cur.execute("SELECT MAX(cache_id) FROM (SELECT cache_id FROM live_cache "
+                        "ORDER BY cache_id LIMIT %s) AS chunk", (CACHE_CHUNK,))
+            last = cur.fetchone()[0]
+            if last is None:
+                self.in_cache = 0
+                return False
+            cur.execute(f"INSERT INTO fact_sales ({cols}) SELECT {cols} FROM live_cache "
+                        f"WHERE cache_id <= %s ORDER BY cache_id", (last,))
+            copied = cur.rowcount
+            cur.execute("DELETE FROM live_cache WHERE cache_id <= %s", (last,))
+            conn.commit()
+        except Exception as e:
+            #undo this chunk; the rows stay in the cache and the next loop tries again
+            conn.rollback()
+            print(f"\nCache copy failed, will retry: {e}\n> ", end="", flush=True)
+            return False
+        finally:
             cur.close()
-            return
-        #only rows up to "last", so rows cached while copying wait for the next copy
-        cur.execute(f"INSERT INTO fact_sales ({cols}) SELECT {cols} FROM live_cache "
-                    f"WHERE cache_id <= %s ORDER BY cache_id", (last,))
-        copied = cur.rowcount
-        cur.execute("DELETE FROM live_cache WHERE cache_id <= %s", (last,))
-        conn.commit()
-        cur.close()
         self.loaded += copied
         self.in_cache -= copied
         self.cache_copies.append((len(self.cache_copies) + 1, copied))
+        return True
 
     #hour tick: load all waiting periodic sales in batches of 1,000
     def load_waiting(self, conn):

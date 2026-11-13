@@ -144,7 +144,7 @@ prints "All 397,884 transactions loaded into the DW" and keeps accepting command
 The **bonus (cache) load is used**. Live results are not inserted into the fact table straight away:
 the LoaderThread writes them into the table `live_cache` (made by `Create-DW.sql`). In a slow period,
 that is while the mode is **non-peak**, it copies the cached rows into `fact_sales` and deletes the copied
-rows from the cache, both in one commit (at most once a second). Periodic results are never cached; they
+rows from the cache, both in one commit, in chunks of 5,000 rows so the loader keeps working between chunks. Periodic results are never cached; they
 are loaded once every simulated hour, after they have been joined. `status` shows how many Live rows are
 in the cache and how many were copied. After non-peak the cache is empty:
 
